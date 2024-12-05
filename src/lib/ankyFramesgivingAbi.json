@@ -8,13 +8,11 @@
   },
   { "inputs": [], "name": "AccountBalanceOverflow", "type": "error" },
   { "inputs": [], "name": "ActiveSessionExists", "type": "error" },
-  { "inputs": [], "name": "AnkyAlreadyRevealed", "type": "error" },
   { "inputs": [], "name": "BalanceQueryForZeroAddress", "type": "error" },
-  { "inputs": [], "name": "InsufficientLives", "type": "error" },
-  { "inputs": [], "name": "InsufficientNewenBalance", "type": "error" },
-  { "inputs": [], "name": "InvalidTokenId", "type": "error" },
-  { "inputs": [], "name": "NotApprovedForMinting", "type": "error" },
+  { "inputs": [], "name": "InvalidTimestamp", "type": "error" },
+  { "inputs": [], "name": "InvalidTokenProvider", "type": "error" },
   { "inputs": [], "name": "NotOwnerNorApproved", "type": "error" },
+  { "inputs": [], "name": "TokenAlreadyDeployed", "type": "error" },
   { "inputs": [], "name": "TokenAlreadyExists", "type": "error" },
   { "inputs": [], "name": "TokenDoesNotExist", "type": "error" },
   { "inputs": [], "name": "TransferFromIncorrectOwner", "type": "error" },
@@ -27,7 +25,9 @@
   { "inputs": [], "name": "Unauthorized", "type": "error" },
   { "inputs": [], "name": "WritingSessionAlreadyEnded", "type": "error" },
   { "inputs": [], "name": "WritingSessionNotEnded", "type": "error" },
+  { "inputs": [], "name": "WritingSessionNotStarted", "type": "error" },
   { "inputs": [], "name": "WritingSessionTooLong", "type": "error" },
+  { "inputs": [], "name": "WritingSessionTooRecent", "type": "error" },
   {
     "anonymous": false,
     "inputs": [
@@ -39,9 +39,9 @@
       },
       {
         "indexed": false,
-        "internalType": "string",
+        "internalType": "bytes32",
         "name": "writingHash",
-        "type": "string"
+        "type": "bytes32"
       },
       {
         "indexed": false,
@@ -108,31 +108,18 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "int256",
-        "name": "userFid",
-        "type": "int256"
+        "internalType": "bytes32",
+        "name": "writingSessionId",
+        "type": "bytes32"
       },
       {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "LivesPurchased",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
         "indexed": true,
-        "internalType": "int256",
-        "name": "userFid",
-        "type": "int256"
+        "internalType": "address",
+        "name": "tokenAddress",
+        "type": "address"
       }
     ],
-    "name": "LivesRefilled",
+    "name": "TokenDeployed",
     "type": "event"
   },
   {
@@ -171,9 +158,9 @@
       },
       {
         "indexed": true,
-        "internalType": "string",
+        "internalType": "bytes32",
         "name": "writingSessionId",
-        "type": "string"
+        "type": "bytes32"
       },
       {
         "indexed": false,
@@ -183,9 +170,9 @@
       },
       {
         "indexed": false,
-        "internalType": "string",
+        "internalType": "bytes32",
         "name": "metadata",
-        "type": "string"
+        "type": "bytes32"
       }
     ],
     "name": "WritingSessionCompleted",
@@ -202,9 +189,9 @@
       },
       {
         "indexed": true,
-        "internalType": "string",
+        "internalType": "bytes32",
         "name": "writingSessionId",
-        "type": "string"
+        "type": "bytes32"
       },
       {
         "indexed": false,
@@ -225,7 +212,7 @@
   },
   {
     "inputs": [],
-    "name": "LIVES_PER_PACK",
+    "name": "MAX_SESSION_LENGTH",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -233,13 +220,6 @@
   {
     "inputs": [],
     "name": "MINTING_PERIOD",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "NEWEN_PER_PACK",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -291,26 +271,43 @@
       { "internalType": "int256", "name": "userFid", "type": "int256" }
     ],
     "name": "checkIfUserHasActiveSession",
-    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "contractURI",
-    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
-    "stateMutability": "pure",
+    "name": "clankerFactory",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "writing_session_id",
+        "type": "bytes32"
+      },
+      { "internalType": "string", "name": "tokenSymbol", "type": "string" },
+      { "internalType": "string", "name": "tokenName", "type": "string" },
+      { "internalType": "uint256", "name": "tokenSupply", "type": "uint256" },
+      { "internalType": "string", "name": "tokenProvider", "type": "string" }
+    ],
+    "name": "deployAnky",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [
       { "internalType": "int256", "name": "userFid", "type": "int256" },
       {
-        "internalType": "string",
+        "internalType": "bytes32",
         "name": "writing_session_id",
-        "type": "string"
+        "type": "bytes32"
       },
-      { "internalType": "string", "name": "metadata", "type": "string" }
+      { "internalType": "bytes32", "name": "ipfs_hash", "type": "bytes32" }
     ],
     "name": "endWritingSession",
     "outputs": [],
@@ -335,18 +332,6 @@
   },
   {
     "inputs": [
-      { "internalType": "int256", "name": "userFid", "type": "int256" }
-    ],
-    "name": "getLivesInfo",
-    "outputs": [
-      { "internalType": "uint256", "name": "lives", "type": "uint256" },
-      { "internalType": "uint256", "name": "lastRefill", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
       { "internalType": "address", "name": "owner", "type": "address" },
       { "internalType": "address", "name": "operator", "type": "address" }
     ],
@@ -356,12 +341,10 @@
     "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "string", "name": "writingHash", "type": "string" }
-    ],
-    "name": "mint",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "inputs": [],
+    "name": "jerryFactory",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -394,25 +377,6 @@
       { "internalType": "address", "name": "result", "type": "address" }
     ],
     "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "int256", "name": "userFid", "type": "int256" }
-    ],
-    "name": "purchaseLives",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "tokenId", "type": "uint256" },
-      { "internalType": "string", "name": "imageURI", "type": "string" }
-    ],
-    "name": "revealAnky",
-    "outputs": [],
-    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -452,9 +416,9 @@
     "inputs": [
       { "internalType": "int256", "name": "userFid", "type": "int256" },
       {
-        "internalType": "string",
+        "internalType": "bytes32",
         "name": "writing_session_id",
-        "type": "string"
+        "type": "bytes32"
       },
       { "internalType": "address", "name": "userWallet", "type": "address" }
     ],
@@ -483,7 +447,7 @@
     "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "name": "tokenMetadata",
     "outputs": [
-      { "internalType": "string", "name": "writingHash", "type": "string" },
+      { "internalType": "bytes32", "name": "writingHash", "type": "bytes32" },
       { "internalType": "string", "name": "imageURI", "type": "string" },
       { "internalType": "bool", "name": "ankyRevealed", "type": "bool" },
       {
@@ -497,17 +461,19 @@
         "type": "uint256"
       },
       {
-        "internalType": "string",
+        "internalType": "bytes32",
         "name": "writingSessionId",
-        "type": "string"
+        "type": "bytes32"
       },
-      { "internalType": "string", "name": "metadata", "type": "string" }
+      { "internalType": "bytes32", "name": "metadata", "type": "bytes32" }
     ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
+    "inputs": [
+      { "internalType": "uint256", "name": "tokenId", "type": "uint256" }
+    ],
     "name": "tokenURI",
     "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
@@ -532,20 +498,6 @@
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "int256", "name": "", "type": "int256" }],
-    "name": "userLives",
-    "outputs": [
-      { "internalType": "uint256", "name": "lives", "type": "uint256" },
-      {
-        "internalType": "uint256",
-        "name": "lastRefillTimestamp",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "withdrawNewen",
     "outputs": [],
@@ -553,24 +505,29 @@
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "inputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "name": "writingSessions",
     "outputs": [
       { "internalType": "int256", "name": "userFid", "type": "int256" },
+      { "internalType": "address", "name": "userWallet", "type": "address" },
       {
-        "internalType": "string",
+        "internalType": "bytes32",
         "name": "writingSessionId",
-        "type": "string"
+        "type": "bytes32"
       },
       {
         "internalType": "uint256",
         "name": "startingTimestamp",
         "type": "uint256"
       },
-      { "internalType": "bool", "name": "ended", "type": "bool" },
-      { "internalType": "address", "name": "userWallet", "type": "address" },
+      {
+        "internalType": "uint256",
+        "name": "endedTimestamp",
+        "type": "uint256"
+      },
+      { "internalType": "bytes32", "name": "ipfsHash", "type": "bytes32" },
       { "internalType": "bool", "name": "isAnky", "type": "bool" },
-      { "internalType": "string", "name": "metadata", "type": "string" }
+      { "internalType": "address", "name": "deployedToken", "type": "address" }
     ],
     "stateMutability": "view",
     "type": "function"
@@ -581,7 +538,7 @@
       { "internalType": "uint256", "name": "", "type": "uint256" }
     ],
     "name": "writingSessionsToUsers",
-    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "stateMutability": "view",
     "type": "function"
   }

@@ -16,11 +16,10 @@ import Image from "next/image";
 import { ethers } from "ethers";
 import Link from "next/link";
 
-const INACTIVITY_TIMEOUT = 8000; // 8 seconds
 const SESSION_TIMEOUT = 8 * 60 * 1000; // 8 minutes
 
 const ANKY_FRAMESGIVING_CONTRACT_ADDRESS =
-  "0x69ef462BC8B02e42849efC6Dced51b8FCc1babe8";
+  "0x286b7584c19d8813b3c8216e9933fba159c99725";
 
 type AnkyMetadata = {
   metadata_ipfs_hash: string;
@@ -31,17 +30,21 @@ type AnkyMetadata = {
 };
 
 export default function WritingGame() {
-  const [sessionLongString, setSessionLongString] = useState("");
+  console.log("INSIDE THE WRITING GAME");
+  const [lastKeystrokeTimestamp, setLastKeystrokeTimestamp] = useState<
+    number | null
+  >(null);
   const [writingSessionEnded, setWritingSessionEnded] = useState(false);
+  const [sessionLongString, setSessionLongString] = useState("");
   const [text, setText] = useState("");
   const [prompt, setPrompt] = useState("");
   const [sessionActive, setSessionActive] = useState(false);
-  const [inactiveTime, setInactiveTime] = useState(0);
-  const [sessionTime, setSessionTime] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(8000);
 
   const [isFarcasterClient, setIsFarcasterClient] = useState(false);
   const [ankyMetadataRequestPending, setAnkyMetadataRequestPending] =
     useState(false);
+  const [alreadyLoaded, setAlreadyLoaded] = useState(false);
   const [sessionStartTimestamp, setSessionStartTimestamp] = useState<
     number | null
   >(null);
@@ -53,7 +56,6 @@ export default function WritingGame() {
   const lastKeystrokeTimeRef = useRef<number | null>(null);
   const keystrokeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const ankyGenerationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const ankyMetadataPollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // SDK state
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
@@ -61,10 +63,10 @@ export default function WritingGame() {
   const [context, setContext] = useState<FrameContext>();
 
   const resetSession = useCallback(async () => {
+    console.log("THE RESET SESSION FUNCTION IS RUNNING NOW");
     setText("");
     setSessionActive(false);
-    setInactiveTime(0);
-    setSessionTime(0);
+    setTimeLeft(8000);
     setSessionLongString("");
     setWritingSessionEnded(false);
     lastKeystrokeTimeRef.current = null;
@@ -75,7 +77,7 @@ export default function WritingGame() {
 
     try {
       const response = await fetch(
-        "https://farcaster.anky.bot/framesgiving/prepare-writing-session"
+        `https://farcaster.anky.bot/framesgiving/prepare-writing-session?fid=${context?.user.fid}&userWallet=${address}`
       );
       const data = await response.json();
       setPrompt(data.upcomingPrompt);
@@ -84,6 +86,37 @@ export default function WritingGame() {
       console.error("Error preparing session:", error);
     }
   }, []);
+
+  const prepareWritingSession = (() => {
+    let hasRun = false;
+
+    return async (userContext: FrameContext, userAddress: string) => {
+      if (!userContext?.user || !userAddress) return;
+      if (hasRun) return;
+
+      hasRun = true;
+      try {
+        const response = await fetch(
+          `https://farcaster.anky.bot/framesgiving/prepare-writing-session?fid=${userContext.user.fid}&userWallet=${userAddress}`
+        );
+
+        const data = await response.json();
+
+        const parsedLongString = data.split("\n");
+        // const fid = parsedLongString[0];
+        const sessionId = parsedLongString[1];
+        const thisSessionPrompt = parsedLongString[2];
+        // const timestamp = parsedLongString[3];
+
+        setPrompt(thisSessionPrompt);
+        setSessionId(sessionId);
+      } catch (error) {
+        console.error("Error preparing writing session:", error);
+        setPrompt("tell us who you are");
+        setSessionId(crypto.randomUUID());
+      }
+    };
+  })();
 
   const startSession = async () => {
     setSessionActive(true);
@@ -101,98 +134,128 @@ export default function WritingGame() {
 
   useEffect(() => {
     const load = async () => {
+      console.log("Starting load function");
+      console.log("Initial conditions:", { alreadyLoaded, sdk, isSDKLoaded });
+
+      if (alreadyLoaded || !sdk || isSDKLoaded) {
+        console.log("Exiting early due to conditions");
+        return;
+      }
+
+      setAlreadyLoaded(true);
+      setIsSDKLoaded(true);
+      console.log("Set loaded states to true");
+
       let sdkContext: FrameContext;
       try {
+        console.log("Attempting to get SDK context");
         sdkContext = await sdk.context;
-        console.log("SDK Context loaded:", sdkContext);
-        setIsFarcasterClient(false);
+        console.log("Got SDK context:", sdkContext);
+
         setContext(sdkContext);
-        await resetSession();
+        console.log("Set context");
+
+        await prepareWritingSession(sdkContext, address || "");
+        console.log("Prepared writing session");
+
         sdk.actions.ready();
+        console.log("Called sdk.actions.ready()");
       } catch (error) {
-        console.log("there was an error loading the sdk", error);
+        console.log("Error in load function:", error);
         setIsFarcasterClient(false);
-        setPrompt("what are you grateful for?");
-        await resetSession();
+        setPrompt("tell us who you are");
+        setSessionId(crypto.randomUUID());
         sdk.actions.ready();
+        console.log("Set fallback values after error");
       }
     };
-    console.log("in heeeree");
-    if (sdk && !isSDKLoaded) {
-      console.log("SDK available and not loaded, initializing...");
-      setIsSDKLoaded(true);
-      load();
-    }
-  }, [isSDKLoaded]);
+
+    console.log("Calling load function");
+    load();
+  }, [sdk, isSDKLoaded, alreadyLoaded]);
 
   useEffect(() => {
-    if (!sessionActive) return;
+    let interval: NodeJS.Timeout;
+    if (lastKeystrokeTimestamp && !writingSessionEnded) {
+      interval = setInterval(() => {
+        const elapsed = Date.now() - lastKeystrokeTimestamp;
+        const remaining = Math.max(0, 8000 - elapsed);
+        setTimeLeft(remaining);
 
-    const timer = setInterval(() => {
-      const now = Date.now();
-
-      if (lastKeystrokeTimeRef.current) {
-        setSessionTime(
-          Math.min(now - lastKeystrokeTimeRef.current, SESSION_TIMEOUT)
-        );
-        const timeSinceLastKeystroke = now - lastKeystrokeTimeRef.current;
-        setInactiveTime(Math.min(timeSinceLastKeystroke, INACTIVITY_TIMEOUT));
-        // setTimeLeft(Math.max(0, INACTIVITY_TIMEOUT - timeSinceLastKeystroke));
-      }
-    }, 100);
-
-    return () => clearInterval(timer);
-  }, [sessionActive]);
-
+        if (remaining === 0) {
+          setWritingSessionEnded(true);
+          clearInterval(interval);
+        }
+      }, 100);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [lastKeystrokeTimestamp, writingSessionEnded]);
   const handleTextChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    console.log("Handling text change");
     const currentTime = Date.now();
     const newValue = e.target.value;
     const lastChar = newValue.slice(-1);
 
     if (!sessionActive) {
+      console.log("Starting new session");
       startSession();
       setSessionStartTimestamp(currentTime);
     }
 
     if (keystrokeTimeoutRef.current) {
+      console.log("Clearing existing keystroke timeout");
       clearTimeout(keystrokeTimeoutRef.current);
     }
 
-    lastKeystrokeTimeRef.current = currentTime;
+    console.log("Updating timestamps and text");
+    setLastKeystrokeTimestamp(currentTime);
+    setTimeLeft(8000);
     setText(newValue);
 
     // Calculate time delta
     const timeDelta =
       currentTime - (lastKeystrokeTimeRef.current ?? currentTime);
+    console.log("Time delta:", timeDelta);
 
     // Add keystroke data to session long string
     setSessionLongString(
       (prev) => prev + `\n${lastChar} ${(timeDelta / 1000).toFixed(3)}`
     );
 
-    const ankyGenerationTimeout = setTimeout(() => {
-      sendAnkyImageRequest();
-    }, SESSION_TIMEOUT * 0.88);
+    lastKeystrokeTimeRef.current = currentTime;
 
     const timeout = setTimeout(() => {
+      console.log("Session timeout reached");
       const finalSessionLongString =
         `${
           context?.user.fid || 16098
         }\n${sessionId}\n${prompt}\n${currentTime}` + sessionLongString;
+      console.log("Final session string:", finalSessionLongString);
       setSessionLongString(finalSessionLongString);
-      console.log("sending the new session long string to the server");
       setWritingSessionEnded(true);
       if (address) {
+        console.log("Sending session to server");
         endWritingSession(finalSessionLongString, address);
       }
     }, 8000);
 
     keystrokeTimeoutRef.current = timeout;
+
+    // Set anky generation timeout
+    if (ankyGenerationTimeoutRef.current) {
+      console.log("Clearing existing anky generation timeout");
+      clearTimeout(ankyGenerationTimeoutRef.current);
+    }
+    const ankyGenerationTimeout = setTimeout(() => {
+      console.log("Triggering anky image request");
+      sendAnkyImageRequest();
+    }, SESSION_TIMEOUT * 0.88);
     ankyGenerationTimeoutRef.current = ankyGenerationTimeout;
   };
-
-  const inactivityProgress = (inactiveTime / INACTIVITY_TIMEOUT) * 100;
-  const sessionProgress = (sessionTime / SESSION_TIMEOUT) * 100;
+  const ankyverseStart = new Date("2023-08-10T05:00:00-04:00");
+  console.log("The ankyverse start date is: ", ankyverseStart.getTime());
 
   const sendAnkyImageRequest = async () => {
     try {
@@ -206,18 +269,25 @@ export default function WritingGame() {
         url: `https://farcaster.anky.bot/framesgiving/create-anky-image-from-long-string`,
         data: {
           session_long_string: sessionLongString,
+          fid: context?.user.fid,
         },
       };
       const response = await axios.request(options);
       console.log("the response is: ", response.data);
-      if (response.data.success) {
-        setAnkyMetadataRequestPending(true);
+      if (response.data) {
+        const ankyMetadataTimeout = setTimeout(() => {
+          if (
+            ankyGenerationTimeoutRef.current &&
+            ankyMetadata?.image_ipfs_hash
+          ) {
+            clearTimeout(ankyGenerationTimeoutRef.current);
+          }
+          pollAnkyMetadataRequest();
+        }, 1000);
+        ankyGenerationTimeoutRef.current = ankyMetadataTimeout;
       }
-      const ankyMetadataPollingInterval = setInterval(
-        pollAnkyMetadataRequest,
-        10000
-      );
-      ankyMetadataPollingIntervalRef.current = ankyMetadataPollingInterval;
+
+      // TODO: get the image here
     } catch (error) {
       console.error("Error sending anky image request:", error);
     }
@@ -258,8 +328,9 @@ export default function WritingGame() {
       const response = await axios.post(
         "https://farcaster.anky.bot/framesgiving/end-writing-session",
         {
-          text: sessionLongString,
-          address: address,
+          session_long_string: sessionLongString,
+          userWallet: address,
+          fid: context?.user.fid,
         },
         {
           headers: {
@@ -279,7 +350,7 @@ export default function WritingGame() {
   };
 
   const deployAnky = async () => {
-    if (!isFarcasterClient || !ankyMetadata) return;
+    if (!isFarcasterClient) return;
 
     try {
       // Hash the session string
@@ -353,10 +424,10 @@ export default function WritingGame() {
 
   return (
     <div className="flex flex-col w-full h-[333px]">
-      <LifeBar inactivityProgress={inactivityProgress} />
-      <AnkyProgressBar sessionProgress={sessionProgress} />
+      <LifeBar timeLeft={timeLeft} />
+      <AnkyProgressBar sessionStartTime={sessionStartTimestamp} />
       <WritingComponent
-        writing={text}
+        text={text}
         prompt={prompt}
         handleTextChange={handleTextChange}
       />
@@ -398,42 +469,54 @@ function UserWonTheGame({
   );
 }
 
-function LifeBar({ inactivityProgress }: { inactivityProgress: number }) {
+function LifeBar({ timeLeft }: { timeLeft: number }) {
   return (
     <div
       className="h-2 bg-blue-500 transition-all duration-100"
       style={{
-        width: `${inactivityProgress}%`,
+        width: `${(timeLeft / 8000) * 100}%`,
       }}
     />
   );
 }
 
 function AnkyProgressBar({
-  sessionProgress,
+  sessionStartTime,
 }: {
-  sessionProgress: number | null;
+  sessionStartTime: number | null;
 }) {
-  console.log("the sessionProgress is: ", sessionProgress);
   return (
     <div
       className="h-4 bg-green-600 transition-all duration-100"
       style={{
-        width: `${sessionProgress}%`,
+        width: `${
+          sessionStartTime
+            ? Math.min(
+                100,
+                ((Date.now() - sessionStartTime) / (8 * 60 * 1000)) * 100
+              )
+            : 100
+        }%`,
       }}
     />
   );
 }
 
 function WritingComponent({
-  writing,
+  text,
   prompt,
   handleTextChange,
 }: {
-  writing: string;
+  text: string;
   prompt: string;
   handleTextChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
 }) {
+  console.log("the prompt is: ", prompt);
+  console.log("the prompt is: ", prompt);
+  console.log("the prompt is: ", prompt);
+  console.log("the prompt is: ", prompt);
+  console.log("the prompt is: ", prompt);
+  console.log("the prompt is: ", prompt);
   const [streamedPrompt, setStreamedPrompt] = useState("");
   const CHAR_DELAY = 22;
 
@@ -464,7 +547,7 @@ function WritingComponent({
       autoComplete="off"
       autoCapitalize="off"
       spellCheck="false"
-      value={writing}
+      value={text}
       onChange={handleTextChange}
     />
   );
@@ -516,16 +599,15 @@ function SessionComplete({
       <div className="w-full flex gap-4 items-center justify-center">
         <button
           onClick={async () => {
-            const new_cast_text = await ankyEditUserWriting(
-              sessionLongString,
-              context.user.fid
+            sdk.actions.openUrl(
+              `https://warpcast.com/~/compose?text=${encodeURIComponent(
+                sessionData.session_text
+              )}`
             );
-            console.log("the new cast text is: ", new_cast_text);
-            // todo: open the cast composer with the new cast text
           }}
-          className="text-7xl py-4"
+          className="text-7xl py-4 bg-white text-black rounded-lg"
         >
-          edit and cast
+          cast
         </button>
         <button onClick={() => onReset(context)} className="text-7xl py-4">
           🔄
