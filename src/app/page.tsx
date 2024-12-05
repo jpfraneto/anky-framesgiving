@@ -5,15 +5,15 @@ const appUrl = process.env.NEXT_PUBLIC_URL;
 
 const frame = {
   version: "next",
-  imageUrl: `https://github.com/jpfraneto/images/blob/main/splash222.png?raw=true`,
+  imageUrl: `https://github.com/jpfraneto/images/blob/main/banner-2-anky.png?raw=true`,
   button: {
-    title: "Launch Frame",
+    title: "anky",
     action: {
       type: "launch_frame",
       name: "Anky",
       url: appUrl,
       splashImageUrl: `https://github.com/jpfraneto/images/blob/main/splash222.png?raw=true`,
-      splashBackgroundColor: "#f7f7f7",
+      splashBackgroundColor: "#CEA2FD",
     },
   },
 };
@@ -34,5 +34,6 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function Home() {
+  console.log("Home");
   return <App />;
 }

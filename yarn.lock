@@ -2301,6 +2301,11 @@ enhanced-resolve@^5.15.0:
     graceful-fs "^4.2.4"
     tapable "^2.2.0"
 
+eruda@^3.4.1:
+  version "3.4.1"
+  resolved "https://registry.yarnpkg.com/eruda/-/eruda-3.4.1.tgz#5ff04fa2c55c3a5f4998e48c952adb759307b53f"
+  integrity sha512-RmaO5yD97URY/9Q0lye3cmmNPoXNKreeePIw7c/zllbscR92CjGFZFuQ70+0fLIvLcKW3Xha8DS8NFhmeNbEBQ==
+
 es-abstract@^1.17.5, es-abstract@^1.22.1, es-abstract@^1.22.3, es-abstract@^1.23.0, es-abstract@^1.23.2, es-abstract@^1.23.3, es-abstract@^1.23.5:
   version "1.23.5"
   resolved "https://registry.yarnpkg.com/es-abstract/-/es-abstract-1.23.5.tgz#f4599a4946d57ed467515ed10e4f157289cd52fb"

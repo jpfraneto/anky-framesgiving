@@ -1,24 +1,83 @@
 [
-  { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_newenToken", "type": "address" }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
   { "inputs": [], "name": "AccountBalanceOverflow", "type": "error" },
+  { "inputs": [], "name": "ActiveSessionExists", "type": "error" },
   { "inputs": [], "name": "AnkyAlreadyRevealed", "type": "error" },
-  { "inputs": [], "name": "ArrayLengthsMismatch", "type": "error" },
-  { "inputs": [], "name": "InsufficientBalance", "type": "error" },
+  { "inputs": [], "name": "BalanceQueryForZeroAddress", "type": "error" },
+  { "inputs": [], "name": "InsufficientLives", "type": "error" },
+  { "inputs": [], "name": "InsufficientNewenBalance", "type": "error" },
   { "inputs": [], "name": "InvalidTokenId", "type": "error" },
-  { "inputs": [], "name": "MaxSupplyReached", "type": "error" },
-  { "inputs": [], "name": "MintingPeriodEnded", "type": "error" },
   { "inputs": [], "name": "NotApprovedForMinting", "type": "error" },
   { "inputs": [], "name": "NotOwnerNorApproved", "type": "error" },
-  { "inputs": [], "name": "TokenNotAssigned", "type": "error" },
+  { "inputs": [], "name": "TokenAlreadyExists", "type": "error" },
+  { "inputs": [], "name": "TokenDoesNotExist", "type": "error" },
+  { "inputs": [], "name": "TransferFromIncorrectOwner", "type": "error" },
   {
     "inputs": [],
-    "name": "TransferToNonERC1155ReceiverImplementer",
+    "name": "TransferToNonERC721ReceiverImplementer",
     "type": "error"
   },
   { "inputs": [], "name": "TransferToZeroAddress", "type": "error" },
   { "inputs": [], "name": "Unauthorized", "type": "error" },
-  { "inputs": [], "name": "WritingSessionNotStarted", "type": "error" },
-  { "inputs": [], "name": "WritingSessionTooRecent", "type": "error" },
+  { "inputs": [], "name": "WritingSessionAlreadyEnded", "type": "error" },
+  { "inputs": [], "name": "WritingSessionNotEnded", "type": "error" },
+  { "inputs": [], "name": "WritingSessionTooLong", "type": "error" },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "writingHash",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      }
+    ],
+    "name": "AnkyMinted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "id",
+        "type": "uint256"
+      }
+    ],
+    "name": "Approval",
+    "type": "event"
+  },
   {
     "anonymous": false,
     "inputs": [
@@ -49,64 +108,9 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "address",
-        "name": "operator",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "from",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256[]",
-        "name": "ids",
-        "type": "uint256[]"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256[]",
-        "name": "amounts",
-        "type": "uint256[]"
-      }
-    ],
-    "name": "TransferBatch",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "operator",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "from",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "id",
-        "type": "uint256"
+        "internalType": "int256",
+        "name": "userFid",
+        "type": "int256"
       },
       {
         "indexed": false,
@@ -115,17 +119,36 @@
         "type": "uint256"
       }
     ],
-    "name": "TransferSingle",
+    "name": "LivesPurchased",
     "type": "event"
   },
   {
     "anonymous": false,
     "inputs": [
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "value",
-        "type": "string"
+        "indexed": true,
+        "internalType": "int256",
+        "name": "userFid",
+        "type": "int256"
+      }
+    ],
+    "name": "LivesRefilled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "from",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
       },
       {
         "indexed": true,
@@ -134,12 +157,75 @@
         "type": "uint256"
       }
     ],
-    "name": "URI",
+    "name": "Transfer",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "int256",
+        "name": "userFid",
+        "type": "int256"
+      },
+      {
+        "indexed": true,
+        "internalType": "string",
+        "name": "writingSessionId",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "endingTimestamp",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "metadata",
+        "type": "string"
+      }
+    ],
+    "name": "WritingSessionCompleted",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "int256",
+        "name": "userFid",
+        "type": "int256"
+      },
+      {
+        "indexed": true,
+        "internalType": "string",
+        "name": "writingSessionId",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "startingTimestamp",
+        "type": "uint256"
+      }
+    ],
+    "name": "WritingSessionStarted",
     "type": "event"
   },
   {
     "inputs": [],
-    "name": "MAX_SUPPLY",
+    "name": "DAY_DURATION",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "LIVES_PER_PACK",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -153,22 +239,45 @@
   },
   {
     "inputs": [],
+    "name": "NEWEN_PER_PACK",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "REFERENCE_TIMESTAMP",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "WRITING_SESSION_DURATION",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
+    "inputs": [
+      { "internalType": "address", "name": "account", "type": "address" },
+      { "internalType": "uint256", "name": "id", "type": "uint256" }
+    ],
+    "name": "approve",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
     "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "name": "approvedMinters",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      { "internalType": "address", "name": "owner", "type": "address" },
-      { "internalType": "uint256", "name": "id", "type": "uint256" }
+      { "internalType": "address", "name": "owner", "type": "address" }
     ],
     "name": "balanceOf",
     "outputs": [
@@ -179,13 +288,10 @@
   },
   {
     "inputs": [
-      { "internalType": "address[]", "name": "owners", "type": "address[]" },
-      { "internalType": "uint256[]", "name": "ids", "type": "uint256[]" }
+      { "internalType": "int256", "name": "userFid", "type": "int256" }
     ],
-    "name": "balanceOfBatch",
-    "outputs": [
-      { "internalType": "uint256[]", "name": "balances", "type": "uint256[]" }
-    ],
+    "name": "checkIfUserHasActiveSession",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -194,6 +300,49 @@
     "name": "contractURI",
     "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "int256", "name": "userFid", "type": "int256" },
+      {
+        "internalType": "string",
+        "name": "writing_session_id",
+        "type": "string"
+      },
+      { "internalType": "string", "name": "metadata", "type": "string" }
+    ],
+    "name": "endWritingSession",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
+    "name": "getApproved",
+    "outputs": [
+      { "internalType": "address", "name": "result", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getCurrentDay",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "int256", "name": "userFid", "type": "int256" }
+    ],
+    "name": "getLivesInfo",
+    "outputs": [
+      { "internalType": "uint256", "name": "lives", "type": "uint256" },
+      { "internalType": "uint256", "name": "lastRefill", "type": "uint256" }
+    ],
+    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -217,9 +366,43 @@
   },
   {
     "inputs": [],
+    "name": "name",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "newenToken",
+    "outputs": [
+      { "internalType": "contract ERC20", "name": "", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "owner",
     "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
+    "name": "ownerOf",
+    "outputs": [
+      { "internalType": "address", "name": "result", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "int256", "name": "userFid", "type": "int256" }
+    ],
+    "name": "purchaseLives",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -236,13 +419,11 @@
     "inputs": [
       { "internalType": "address", "name": "from", "type": "address" },
       { "internalType": "address", "name": "to", "type": "address" },
-      { "internalType": "uint256[]", "name": "ids", "type": "uint256[]" },
-      { "internalType": "uint256[]", "name": "amounts", "type": "uint256[]" },
-      { "internalType": "bytes", "name": "data", "type": "bytes" }
+      { "internalType": "uint256", "name": "id", "type": "uint256" }
     ],
-    "name": "safeBatchTransferFrom",
+    "name": "safeTransferFrom",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -250,12 +431,11 @@
       { "internalType": "address", "name": "from", "type": "address" },
       { "internalType": "address", "name": "to", "type": "address" },
       { "internalType": "uint256", "name": "id", "type": "uint256" },
-      { "internalType": "uint256", "name": "amount", "type": "uint256" },
       { "internalType": "bytes", "name": "data", "type": "bytes" }
     ],
     "name": "safeTransferFrom",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -270,11 +450,15 @@
   },
   {
     "inputs": [
-      { "internalType": "address", "name": "user", "type": "address" },
-      { "internalType": "uint256", "name": "tokenId", "type": "uint256" },
-      { "internalType": "string", "name": "writingSessionId", "type": "string" }
+      { "internalType": "int256", "name": "userFid", "type": "int256" },
+      {
+        "internalType": "string",
+        "name": "writing_session_id",
+        "type": "string"
+      },
+      { "internalType": "address", "name": "userWallet", "type": "address" }
     ],
-    "name": "startWritingSession",
+    "name": "startNewWritingSession",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -286,6 +470,13 @@
     "name": "supportsInterface",
     "outputs": [{ "internalType": "bool", "name": "result", "type": "bool" }],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "symbol",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "pure",
     "type": "function"
   },
   {
@@ -305,8 +496,20 @@
         "name": "writingSessionStartedAt",
         "type": "uint256"
       },
-      { "internalType": "string", "name": "writingSessionId", "type": "string" }
+      {
+        "internalType": "string",
+        "name": "writingSessionId",
+        "type": "string"
+      },
+      { "internalType": "string", "name": "metadata", "type": "string" }
     ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
+    "name": "tokenURI",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -318,8 +521,66 @@
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "uint256", "name": "id", "type": "uint256" }],
-    "name": "uri",
+    "inputs": [
+      { "internalType": "address", "name": "from", "type": "address" },
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "id", "type": "uint256" }
+    ],
+    "name": "transferFrom",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "int256", "name": "", "type": "int256" }],
+    "name": "userLives",
+    "outputs": [
+      { "internalType": "uint256", "name": "lives", "type": "uint256" },
+      {
+        "internalType": "uint256",
+        "name": "lastRefillTimestamp",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "withdrawNewen",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "name": "writingSessions",
+    "outputs": [
+      { "internalType": "int256", "name": "userFid", "type": "int256" },
+      {
+        "internalType": "string",
+        "name": "writingSessionId",
+        "type": "string"
+      },
+      {
+        "internalType": "uint256",
+        "name": "startingTimestamp",
+        "type": "uint256"
+      },
+      { "internalType": "bool", "name": "ended", "type": "bool" },
+      { "internalType": "address", "name": "userWallet", "type": "address" },
+      { "internalType": "bool", "name": "isAnky", "type": "bool" },
+      { "internalType": "string", "name": "metadata", "type": "string" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "int256", "name": "", "type": "int256" },
+      { "internalType": "uint256", "name": "", "type": "uint256" }
+    ],
+    "name": "writingSessionsToUsers",
     "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
