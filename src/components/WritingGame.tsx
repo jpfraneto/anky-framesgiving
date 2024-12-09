@@ -8,25 +8,28 @@ import {
 } from "react";
 import sdk, { type FrameContext } from "@farcaster/frame-sdk";
 import { useAccount, useWriteContract } from "wagmi";
+import { Wand2, RefreshCw } from "lucide-react";
 
 import ankyFramesgivingAbi from "../lib/ankyFramesgivingAbi.json";
 
 import axios from "axios";
 import Image from "next/image";
-import { ethers } from "ethers";
 import Link from "next/link";
+
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const SESSION_TIMEOUT = 8 * 60 * 1000; // 8 minutes
 
 const ANKY_FRAMESGIVING_CONTRACT_ADDRESS =
-  "0x286b7584c19d8813b3c8216e9933fba159c99725";
+  "0x699367a44d8ffc90e0cd07cbab218174d13f7e55";
 
 type AnkyMetadata = {
-  metadata_ipfs_hash: string;
   ticker: string;
   token_name: string;
   image_ipfs_hash: string;
   description: string;
+  image_cloudinary_url: string;
 };
 
 export default function WritingGame() {
@@ -35,6 +38,7 @@ export default function WritingGame() {
     number | null
   >(null);
   const [writingSessionEnded, setWritingSessionEnded] = useState(false);
+  const [resettingSession, setResettingSession] = useState(false);
   const [sessionLongString, setSessionLongString] = useState("");
   const [text, setText] = useState("");
   const [prompt, setPrompt] = useState("");
@@ -55,37 +59,13 @@ export default function WritingGame() {
 
   const lastKeystrokeTimeRef = useRef<number | null>(null);
   const keystrokeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const ankyGenerationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // SDK state
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [context, setContext] = useState<FrameContext>();
-
-  const resetSession = useCallback(async () => {
-    console.log("THE RESET SESSION FUNCTION IS RUNNING NOW");
-    setText("");
-    setSessionActive(false);
-    setTimeLeft(8000);
-    setSessionLongString("");
-    setWritingSessionEnded(false);
-    lastKeystrokeTimeRef.current = null;
-
-    if (keystrokeTimeoutRef.current) {
-      clearTimeout(keystrokeTimeoutRef.current);
-    }
-
-    try {
-      const response = await fetch(
-        `https://farcaster.anky.bot/framesgiving/prepare-writing-session?fid=${context?.user.fid}&userWallet=${address}`
-      );
-      const data = await response.json();
-      setPrompt(data.upcomingPrompt);
-      setSessionId(data.sessionId || Date.now().toString());
-    } catch (error) {
-      console.error("Error preparing session:", error);
-    }
-  }, []);
+  const [finalCastText, setFinalCastText] = useState<string | null>(null);
+  const [processingCastText, setProcessingCastText] = useState(true);
 
   const prepareWritingSession = (() => {
     let hasRun = false;
@@ -96,39 +76,111 @@ export default function WritingGame() {
 
       hasRun = true;
       try {
-        const response = await fetch(
+        const response = await axios.get(
           `https://farcaster.anky.bot/framesgiving/prepare-writing-session?fid=${userContext.user.fid}&userWallet=${userAddress}`
         );
 
-        const data = await response.json();
+        const data = response.data;
+        console.log("THE DATA IS");
+        console.log("THE DATA IS");
+        console.log("THE DATA IS");
+        console.log("THE DATA IS");
+        console.log(data);
+        console.log("THE DATA IS");
+        console.log("THE DATA IS");
+        console.log("THE DATA IS");
+        console.log("THE DATA IS");
 
-        const parsedLongString = data.split("\n");
+        const parsedLongString = data.session_long_string.split("\n");
         // const fid = parsedLongString[0];
         const sessionId = parsedLongString[1];
+        console.log("IN HERE<<<<< THE SESSION ID IS: ", sessionId);
         const thisSessionPrompt = parsedLongString[2];
-        // const timestamp = parsedLongString[3];
-
         setPrompt(thisSessionPrompt);
+        console.log("setting the session id", sessionId);
         setSessionId(sessionId);
       } catch (error) {
         console.error("Error preparing writing session:", error);
-        setPrompt("tell us who you are");
-        setSessionId(crypto.randomUUID());
       }
     };
   })();
 
+  const resetSession = useCallback(async () => {
+    setResettingSession(true);
+    console.log("THE RESET SESSION FUNCTION IS RUNNING NOW");
+    setText("");
+    setSessionActive(false);
+    setTimeLeft(8000);
+    setSessionLongString("");
+    setWritingSessionEnded(false);
+    setSessionStartTimestamp(new Date().getTime());
+    if (keystrokeTimeoutRef.current) {
+      clearTimeout(keystrokeTimeoutRef.current);
+    }
+    lastKeystrokeTimeRef.current = null;
+
+    try {
+      await prepareWritingSession(context!, address!);
+      setResettingSession(false);
+    } catch (error) {
+      console.error("Error preparing session:", error);
+      setPrompt("tell us who you are");
+      setSessionId(crypto.randomUUID());
+    }
+  }, []);
+
   const startSession = async () => {
     setSessionActive(true);
     try {
-      await fetch(
+      console.log("IN HERE<<<<< THE SESSION ID IS: ", sessionId);
+      console.log("IN HERE<<<<< THE context ID IS: ", context);
+      console.log("IN HERE<<<<< THE ADDRESS IS: ", address);
+      if (!context?.user?.fid || !address || !sessionId) {
+        throw new Error("Missing required session data");
+      }
+
+      console.log("Starting session", context, address, sessionId);
+
+      const response = await axios.post(
         "https://farcaster.anky.bot/framesgiving/start-writing-session",
         {
-          method: "POST",
+          fid: context.user.fid,
+          userWallet: address,
+          idempotencyKey: crypto.randomUUID(),
+          session_id: sessionId,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
         }
       );
+
+      setTimeout(() => {
+        toast.info("6 minutes remaining");
+      }, 120000);
+      setTimeout(() => {
+        toast.info("4 minutes remaining");
+      }, 240000);
+      setTimeout(() => {
+        toast.info("2 minutes remaining");
+      }, 360000);
+      setTimeout(() => {
+        console.log("Triggering anky image request");
+        sendAnkyImageRequest();
+      }, 420000);
+
+      // Handle successful response
+      if (response.data) {
+        // Do something with the response if needed
+        return response.data;
+      }
     } catch (error) {
       console.error("Error starting session:", error);
+      toast.error("Failed to start writing session");
+      // Optionally reset session state or show error to user
+      setSessionActive(false);
+      throw error; // Re-throw if you want to handle it in the calling function
     }
   };
 
@@ -183,7 +235,6 @@ export default function WritingGame() {
         setTimeLeft(remaining);
 
         if (remaining === 0) {
-          setWritingSessionEnded(true);
           clearInterval(interval);
         }
       }, 100);
@@ -242,17 +293,6 @@ export default function WritingGame() {
     }, 8000);
 
     keystrokeTimeoutRef.current = timeout;
-
-    // Set anky generation timeout
-    if (ankyGenerationTimeoutRef.current) {
-      console.log("Clearing existing anky generation timeout");
-      clearTimeout(ankyGenerationTimeoutRef.current);
-    }
-    const ankyGenerationTimeout = setTimeout(() => {
-      console.log("Triggering anky image request");
-      sendAnkyImageRequest();
-    }, SESSION_TIMEOUT * 0.88);
-    ankyGenerationTimeoutRef.current = ankyGenerationTimeout;
   };
   const ankyverseStart = new Date("2023-08-10T05:00:00-04:00");
   console.log("The ankyverse start date is: ", ankyverseStart.getTime());
@@ -266,57 +306,34 @@ export default function WritingGame() {
           Accept: "application/json",
         },
         method: "POST",
-        url: `https://farcaster.anky.bot/framesgiving/create-anky-image-from-long-string`,
+        url: `https://farcaster.anky.bot/framesgiving/generate-anky-image-from-session-long-string`,
         data: {
           session_long_string: sessionLongString,
           fid: context?.user.fid,
         },
+        timeout: 70000, // 70 second timeout to account for the long processing time
       };
       const response = await axios.request(options);
       console.log("the response is: ", response.data);
       if (response.data) {
-        const ankyMetadataTimeout = setTimeout(() => {
-          if (
-            ankyGenerationTimeoutRef.current &&
-            ankyMetadata?.image_ipfs_hash
-          ) {
-            clearTimeout(ankyGenerationTimeoutRef.current);
-          }
-          pollAnkyMetadataRequest();
-        }, 1000);
-        ankyGenerationTimeoutRef.current = ankyMetadataTimeout;
-      }
-
-      // TODO: get the image here
-    } catch (error) {
-      console.error("Error sending anky image request:", error);
-    }
-  };
-
-  const pollAnkyMetadataRequest = async () => {
-    if (ankyGenerationTimeoutRef.current) {
-      clearTimeout(ankyGenerationTimeoutRef.current);
-    }
-    try {
-      const options = {
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        method: "POST",
-        url: `https://farcaster.anky.bot/framesgiving/fetch-anky-metadata-status`,
-        data: {
-          session_id: sessionId,
-        },
-      };
-      const response = await axios.request(options);
-      console.log("the response is: ", response.data);
-      if (response.data.anky_metadata.success) {
-        setAnkyMetadata(response.data.anky_metadata);
+        setAnkyMetadata({
+          ticker: response.data.ticker,
+          token_name: response.data.token_name,
+          image_ipfs_hash: response.data.image_ipfs_hash,
+          description: response.data.reflection_to_user,
+          image_cloudinary_url: response.data.image_cloudinary_url,
+        });
         setAnkyMetadataRequestPending(false);
       }
     } catch (error) {
-      console.error("Error polling anky metadata request:", error);
+      if (axios.isAxiosError(error) && error.code === "ECONNABORTED") {
+        console.error(
+          "Request timed out - the image generation is taking longer than expected"
+        );
+      } else {
+        console.error("Error sending anky image request:", error);
+      }
+      setAnkyMetadataRequestPending(false);
     }
   };
 
@@ -325,6 +342,12 @@ export default function WritingGame() {
     address: string
   ) => {
     try {
+      const sessionData = extractSessionDataFromLongString(sessionLongString);
+      if (sessionData.total_time_written < 480000) {
+        setFinalCastText(text);
+        setProcessingCastText(false);
+        return;
+      }
       const response = await axios.post(
         "https://farcaster.anky.bot/framesgiving/end-writing-session",
         {
@@ -343,6 +366,8 @@ export default function WritingGame() {
         response
       );
       // todo: here we should get the reply from anky based on the session stats
+      setFinalCastText(response.data.new_cast_text);
+      setProcessingCastText(false);
       return response.data;
     } catch (error) {
       console.error("Error ending session:", error);
@@ -350,34 +375,50 @@ export default function WritingGame() {
   };
 
   const deployAnky = async () => {
-    if (!isFarcasterClient) return;
+    if (!isFarcasterClient) {
+      toast.error("Please access this from a Farcaster client");
+      return;
+    }
 
     try {
-      // Hash the session string
-      const sessionHash = ethers.keccak256(
-        ethers.toUtf8Bytes(sessionLongString)
-      );
-      const options = {
-        method: "POST",
-        url: `https://farcaster.anky.bot/framesgiving/get-anky-metadata`,
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-      };
-      const response = await axios.request(options);
-      console.log("the response here is: ", response);
+      if (!ankyMetadata?.image_ipfs_hash) {
+        toast.error("No image IPFS hash found");
+        return;
+      }
+      if (!ankyMetadata?.ticker) {
+        toast.error("No ticker found");
+        return;
+      }
+      if (!ankyMetadata?.token_name) {
+        toast.error("No token name found");
+        return;
+      }
 
-      // Send the hash on-chain
+      toast.info(
+        "Deploying your Anky. This is probably not ready yet but who knows what will happen...",
+        {
+          autoClose: false,
+          toastId: "deploying",
+        }
+      );
+
       const responseFromContract = await writeContract({
         abi: ankyFramesgivingAbi,
         address: ANKY_FRAMESGIVING_CONTRACT_ADDRESS,
         functionName: "deployAnky",
-        args: [sessionHash],
+        args: [
+          ankyMetadata.image_ipfs_hash,
+          ankyMetadata.ticker,
+          ankyMetadata.token_name,
+        ],
       });
-      console.log("the response from the contract is: ", responseFromContract);
+
+      toast.dismiss("deploying");
+      toast.success("Anky deployed successfully!");
       return responseFromContract;
     } catch (error) {
+      toast.dismiss("deploying");
+      toast.error("Failed to deploy Anky");
       console.error("Error deploying Anky:", error);
     }
   };
@@ -399,10 +440,20 @@ export default function WritingGame() {
       </div>
     );
 
+  if (resettingSession) {
+    return <div>resetting session...</div>;
+  }
+
   if (writingSessionEnded) {
     const elapsedTime = sessionStartTimestamp
       ? Date.now() - sessionStartTimestamp
       : 0;
+    console.log(
+      "RIGHT BEFORE RENDERING THE END SCREEN, the variables are: ",
+      elapsedTime,
+      sessionStartTimestamp,
+      isFarcasterClient
+    );
     if (elapsedTime >= SESSION_TIMEOUT && isFarcasterClient) {
       return (
         <UserWonTheGame
@@ -417,13 +468,26 @@ export default function WritingGame() {
           sessionLongString={sessionLongString}
           onReset={resetSession}
           context={context!}
+          finalCastText={finalCastText}
+          processingCastText={processingCastText}
         />
       );
     }
   }
 
   return (
-    <div className="flex flex-col w-full h-[333px]">
+    <div className="flex flex-col w-full h-[380px]">
+      <ToastContainer
+        position="top-right"
+        autoClose={1618}
+        hideProgressBar={true}
+        newestOnTop
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+      />
       <LifeBar timeLeft={timeLeft} />
       <AnkyProgressBar sessionStartTime={sessionStartTimestamp} />
       <WritingComponent
@@ -455,13 +519,13 @@ function UserWonTheGame({
   return (
     <div className="flex flex-col items-center justify-center h-full pt-8">
       <Image
-        src={`https://anky.mypinata.cloud/ipfs/${ankyMetadata?.image_ipfs_hash}`}
+        src={ankyMetadata.image_cloudinary_url}
         alt="anon"
         width={300}
         height={300}
       />
       <p className="text-white text-2xl">${ankyMetadata.ticker}</p>
-      <p className="text-white text-2xl">${ankyMetadata.token_name}</p>
+      <p className="text-white text-3xl">{ankyMetadata.token_name}</p>
       <div className="text-white text-2xl">
         <button onClick={deployAnky}>deploy anky</button>
       </div>
@@ -557,10 +621,14 @@ function SessionComplete({
   sessionLongString,
   onReset,
   context,
+  finalCastText,
+  processingCastText,
 }: {
   sessionLongString: string;
   onReset: (context: FrameContext) => void;
   context: FrameContext;
+  finalCastText: string | null;
+  processingCastText: boolean;
 }) {
   const sessionData = extractSessionDataFromLongString(sessionLongString);
   console.log("the session data is: ", sessionData);
@@ -596,23 +664,78 @@ function SessionComplete({
         </div>
       </div>
 
-      <div className="w-full flex gap-4 items-center justify-center">
+      <SessionCompleteButtons
+        onReset={onReset}
+        context={context}
+        finalCastText={finalCastText}
+        processingCastText={processingCastText}
+      />
+    </div>
+  );
+}
+
+function SessionCompleteButtons({
+  onReset,
+  context,
+  finalCastText,
+  processingCastText,
+}: {
+  onReset: (context: FrameContext) => void;
+  context: FrameContext;
+  finalCastText: string | null;
+  processingCastText: boolean;
+}) {
+  const castWritingSession = async () => {
+    if (!finalCastText) {
+      toast.error("No cast text found");
+      return;
+    }
+    sdk.actions.openUrl(
+      `https://warpcast.com/~/compose?text=${encodeURIComponent(finalCastText)}`
+    );
+  };
+
+  return (
+    <div className="w-full flex gap-4 items-center justify-center flex-col px-4 pb-8">
+      <div className="w-full flex gap-4">
         <button
-          onClick={async () => {
-            sdk.actions.openUrl(
-              `https://warpcast.com/~/compose?text=${encodeURIComponent(
-                sessionData.session_text
-              )}`
-            );
-          }}
-          className="text-7xl py-4 bg-white text-black rounded-lg"
+          onClick={castWritingSession}
+          className={`w-full relative flex items-center justify-center gap-2 
+            bg-purple-600 hover:bg-purple-700
+            text-white font-semibold py-4 px-6 rounded-lg 
+            transition-all duration-300 shadow-lg 
+            hover:shadow-purple-500/30 disabled:opacity-75
+            overflow-hidden`}
         >
-          cast
-        </button>
-        <button onClick={() => onReset(context)} className="text-7xl py-4">
-          🔄
+          {processingCastText ? (
+            <>
+              <div className="absolute inset-0 bg-purple-700/20 animate-pulse" />
+              <Wand2 className="w-6 h-6 animate-spin" />
+              <span className="text-xl">processing</span>
+            </>
+          ) : (
+            <>
+              <Wand2 className="w-6 h-6" />
+              <span className="text-xl">cast</span>
+            </>
+          )}
         </button>
       </div>
+
+      <button
+        onClick={() => {
+          onReset(context);
+          toast.info("preparing new writing session...");
+        }}
+        className="w-full flex items-center justify-center gap-2 
+          bg-gray-700 hover:bg-gray-800 text-white font-semibold 
+          py-4 px-6 rounded-lg transition-all duration-300 
+          shadow-lg hover:shadow-gray-500/30 
+          hover:scale-105 active:scale-95"
+      >
+        <RefreshCw className="w-6 h-6" />
+        <span className="text-xl">start again</span>
+      </button>
     </div>
   );
 }
@@ -646,7 +769,7 @@ export async function ankyEditUserWriting(
   }
 }
 
-export function extractSessionDataFromLongString(session_long_string: string): {
+interface SessionData {
   user_id: string;
   session_id: string;
   prompt: string;
@@ -656,7 +779,11 @@ export function extractSessionDataFromLongString(session_long_string: string): {
   word_count: number;
   average_wpm: number;
   flow_score: number;
-} {
+}
+
+export function extractSessionDataFromLongString(
+  session_long_string: string
+): SessionData {
   const lines = session_long_string.split("\n");
   const user_id = lines[0];
   const session_id = lines[1];

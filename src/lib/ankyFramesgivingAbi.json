@@ -7,12 +7,8 @@
     "type": "constructor"
   },
   { "inputs": [], "name": "AccountBalanceOverflow", "type": "error" },
-  { "inputs": [], "name": "ActiveSessionExists", "type": "error" },
   { "inputs": [], "name": "BalanceQueryForZeroAddress", "type": "error" },
-  { "inputs": [], "name": "InvalidTimestamp", "type": "error" },
-  { "inputs": [], "name": "InvalidTokenProvider", "type": "error" },
   { "inputs": [], "name": "NotOwnerNorApproved", "type": "error" },
-  { "inputs": [], "name": "TokenAlreadyDeployed", "type": "error" },
   { "inputs": [], "name": "TokenAlreadyExists", "type": "error" },
   { "inputs": [], "name": "TokenDoesNotExist", "type": "error" },
   { "inputs": [], "name": "TransferFromIncorrectOwner", "type": "error" },
@@ -23,36 +19,7 @@
   },
   { "inputs": [], "name": "TransferToZeroAddress", "type": "error" },
   { "inputs": [], "name": "Unauthorized", "type": "error" },
-  { "inputs": [], "name": "WritingSessionAlreadyEnded", "type": "error" },
-  { "inputs": [], "name": "WritingSessionNotEnded", "type": "error" },
   { "inputs": [], "name": "WritingSessionNotStarted", "type": "error" },
-  { "inputs": [], "name": "WritingSessionTooLong", "type": "error" },
-  { "inputs": [], "name": "WritingSessionTooRecent", "type": "error" },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "recipient",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "writingHash",
-        "type": "bytes32"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "tokenId",
-        "type": "uint256"
-      }
-    ],
-    "name": "AnkyMinted",
-    "type": "event"
-  },
   {
     "anonymous": false,
     "inputs": [
@@ -108,18 +75,49 @@
     "inputs": [
       {
         "indexed": true,
-        "internalType": "bytes32",
-        "name": "writingSessionId",
-        "type": "bytes32"
+        "internalType": "int256",
+        "name": "fid",
+        "type": "int256"
       },
       {
-        "indexed": true,
-        "internalType": "address",
-        "name": "tokenAddress",
-        "type": "address"
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "endTime",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "sessionText",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "ipfsHash",
+        "type": "string"
       }
     ],
-    "name": "TokenDeployed",
+    "name": "SessionEnded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "int256",
+        "name": "fid",
+        "type": "int256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "startTime",
+        "type": "uint256"
+      }
+    ],
+    "name": "SessionStarted",
     "type": "event"
   },
   {
@@ -153,80 +151,22 @@
       {
         "indexed": true,
         "internalType": "int256",
-        "name": "userFid",
+        "name": "fid",
         "type": "int256"
       },
       {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "writingSessionId",
-        "type": "bytes32"
-      },
-      {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "endingTimestamp",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "metadata",
-        "type": "bytes32"
+        "internalType": "string",
+        "name": "content",
+        "type": "string"
       }
     ],
-    "name": "WritingSessionCompleted",
+    "name": "WritingUpdated",
     "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "int256",
-        "name": "userFid",
-        "type": "int256"
-      },
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "writingSessionId",
-        "type": "bytes32"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "startingTimestamp",
-        "type": "uint256"
-      }
-    ],
-    "name": "WritingSessionStarted",
-    "type": "event"
-  },
-  {
-    "inputs": [],
-    "name": "DAY_DURATION",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
   },
   {
     "inputs": [],
     "name": "MAX_SESSION_LENGTH",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "MINTING_PERIOD",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "REFERENCE_TIMESTAMP",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
@@ -239,6 +179,23 @@
     "type": "function"
   },
   {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "allWritersAtThisMoment",
+    "outputs": [{ "internalType": "int256", "name": "", "type": "int256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "int256", "name": "", "type": "int256" },
+      { "internalType": "uint256", "name": "", "type": "uint256" }
+    ],
+    "name": "ankysForUser",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       { "internalType": "address", "name": "account", "type": "address" },
       { "internalType": "uint256", "name": "id", "type": "uint256" }
@@ -246,13 +203,6 @@
     "name": "approve",
     "outputs": [],
     "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "name": "approvedMinters",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -268,48 +218,38 @@
   },
   {
     "inputs": [
-      { "internalType": "int256", "name": "userFid", "type": "int256" }
+      { "internalType": "int256", "name": "", "type": "int256" },
+      { "internalType": "uint256", "name": "", "type": "uint256" }
     ],
-    "name": "checkIfUserHasActiveSession",
-    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "clankerFactory",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "completedSessions",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
     "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "writing_session_id",
-        "type": "bytes32"
-      },
-      { "internalType": "string", "name": "tokenSymbol", "type": "string" },
-      { "internalType": "string", "name": "tokenName", "type": "string" },
-      { "internalType": "uint256", "name": "tokenSupply", "type": "uint256" },
-      { "internalType": "string", "name": "tokenProvider", "type": "string" }
+      { "internalType": "int256", "name": "fid", "type": "int256" },
+      { "internalType": "string", "name": "ipfsHash", "type": "string" }
     ],
-    "name": "deployAnky",
+    "name": "createAndDeployAnky",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
+    "inputs": [{ "internalType": "int256", "name": "", "type": "int256" }],
+    "name": "currentWritingSession",
+    "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
-      { "internalType": "int256", "name": "userFid", "type": "int256" },
-      {
-        "internalType": "bytes32",
-        "name": "writing_session_id",
-        "type": "bytes32"
-      },
-      { "internalType": "bytes32", "name": "ipfs_hash", "type": "bytes32" }
+      { "internalType": "int256", "name": "fid", "type": "int256" },
+      { "internalType": "string", "name": "ipfsHash", "type": "string" },
+      { "internalType": "bool", "name": "isAnky", "type": "bool" }
     ],
-    "name": "endWritingSession",
+    "name": "endSession",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -324,9 +264,19 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "getCurrentDay",
+    "inputs": [{ "internalType": "int256", "name": "fid", "type": "int256" }],
+    "name": "getCompletedSessionCount",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "int256", "name": "fid", "type": "int256" }],
+    "name": "getCurrentSession",
+    "outputs": [
+      { "internalType": "string", "name": "text", "type": "string" },
+      { "internalType": "uint256", "name": "startTime", "type": "uint256" }
+    ],
     "stateMutability": "view",
     "type": "function"
   },
@@ -337,13 +287,6 @@
     ],
     "name": "isApprovedForAll",
     "outputs": [{ "internalType": "bool", "name": "result", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "jerryFactory",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -403,6 +346,13 @@
     "type": "function"
   },
   {
+    "inputs": [{ "internalType": "int256", "name": "", "type": "int256" }],
+    "name": "sessionStartTimes",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
     "inputs": [
       { "internalType": "address", "name": "operator", "type": "address" },
       { "internalType": "bool", "name": "isApproved", "type": "bool" }
@@ -414,15 +364,10 @@
   },
   {
     "inputs": [
-      { "internalType": "int256", "name": "userFid", "type": "int256" },
-      {
-        "internalType": "bytes32",
-        "name": "writing_session_id",
-        "type": "bytes32"
-      },
-      { "internalType": "address", "name": "userWallet", "type": "address" }
+      { "internalType": "int256", "name": "fid", "type": "int256" },
+      { "internalType": "string", "name": "session_id", "type": "string" }
     ],
-    "name": "startNewWritingSession",
+    "name": "startSession",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -445,45 +390,9 @@
   },
   {
     "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "name": "tokenMetadata",
-    "outputs": [
-      { "internalType": "bytes32", "name": "writingHash", "type": "bytes32" },
-      { "internalType": "string", "name": "imageURI", "type": "string" },
-      { "internalType": "bool", "name": "ankyRevealed", "type": "bool" },
-      {
-        "internalType": "uint256",
-        "name": "mintingStartedAt",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "writingSessionStartedAt",
-        "type": "uint256"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "writingSessionId",
-        "type": "bytes32"
-      },
-      { "internalType": "bytes32", "name": "metadata", "type": "bytes32" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "tokenId", "type": "uint256" }
-    ],
     "name": "tokenURI",
     "outputs": [{ "internalType": "string", "name": "", "type": "string" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "totalSupply",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
+    "stateMutability": "pure",
     "type": "function"
   },
   {
@@ -498,6 +407,16 @@
     "type": "function"
   },
   {
+    "inputs": [
+      { "internalType": "int256", "name": "fid", "type": "int256" },
+      { "internalType": "string", "name": "text", "type": "string" }
+    ],
+    "name": "updateCurrentWriting",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "withdrawNewen",
     "outputs": [],
@@ -505,40 +424,9 @@
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
-    "name": "writingSessions",
-    "outputs": [
-      { "internalType": "int256", "name": "userFid", "type": "int256" },
-      { "internalType": "address", "name": "userWallet", "type": "address" },
-      {
-        "internalType": "bytes32",
-        "name": "writingSessionId",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "uint256",
-        "name": "startingTimestamp",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "endedTimestamp",
-        "type": "uint256"
-      },
-      { "internalType": "bytes32", "name": "ipfsHash", "type": "bytes32" },
-      { "internalType": "bool", "name": "isAnky", "type": "bool" },
-      { "internalType": "address", "name": "deployedToken", "type": "address" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "int256", "name": "", "type": "int256" },
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
-    "name": "writingSessionsToUsers",
-    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
+    "inputs": [{ "internalType": "int256", "name": "", "type": "int256" }],
+    "name": "writerToIndex",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
     "type": "function"
   }
