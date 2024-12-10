@@ -4,18 +4,21 @@ export async function GET() {
   const config = {
     accountAssociation: {
       header:
-        "eyJmaWQiOjM2MjEsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgyY2Q4NWEwOTMyNjFmNTkyNzA4MDRBNkVBNjk3Q2VBNENlQkVjYWZFIn0",
-      payload: "eyJkb21haW4iOiJmcmFtZXMtdjIudmVyY2VsLmFwcCJ9",
+        "eyJmaWQiOjE2MDk4LCJ0eXBlIjoiY3VzdG9keSIsImtleSI6IjB4YUIyMERlOGY1QTRmOGUxNDdCYWFDOUQxZjZlMjM2ODYxNDg1NTE2QSJ9",
+      payload: "eyJkb21haW4iOiJmcmFtZXNnaXZpbmcuYW5reS5ib3QifQ",
       signature:
-        "MHhiNDIwMzQ1MGZkNzgzYTExZjRiOTllZTFlYjA3NmMwOTdjM2JkOTY1NGM2ODZjYjkyZTAyMzk2Y2Q0YjU2MWY1MjY5NjI5ZGQ5NTliYjU0YzEwOGI4OGVmNjdjMTVlZTdjZDc2YTRiMGU5NzkzNzA3YzkxYzFkOWFjNTg0YmQzNjFi",
+        "MHg4NmFkZjY2NjcwYzc3MzAyZjFiMDhlOGU1ZWMxMzAxZmU0MjNlOTE0NTA1MjI3MWQ0OWYwM2I4OWRhMmRmNTgwNmYyOWYzODViZmFmNzcyZDk1NmIxZWVjNGJjMWM2ODM5N2E2NDNiODRhYjg4NTk0OTFiNGRhNTAwNzYwNTRhMzFj",
     },
     frame: {
-      version: "0.0.0",
-      name: "Frames v2 Demo",
-      iconUrl: `${appUrl}/icon.png`,
-      splashImageUrl: `${appUrl}/splash.png`,
-      splashBackgroundColor: "#f7f7f7",
-      homeUrl: appUrl,
+      name: "Anky",
+      version: "0.0.1",
+      iconUrl:
+        "https://raw.githubusercontent.com/jpfraneto/images/refs/heads/main/splash222.png",
+      homeUrl: "https://framesgiving.anky.bot",
+      splashImageUrl:
+        "https://raw.githubusercontent.com/jpfraneto/images/refs/heads/main/splash222.png",
+      splashBackgroundColor: "#9D00FF",
+      webhookUrl: "https://farcaster.anky.bot/farcaster-webhook",
     },
   };
 

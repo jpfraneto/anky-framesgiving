@@ -67,6 +67,8 @@ export default function WritingGame() {
   const [finalCastText, setFinalCastText] = useState<string | null>(null);
   const [processingCastText, setProcessingCastText] = useState(true);
 
+  const [addFrameResult, setAddFrameResult] = useState("");
+
   const prepareWritingSession = (() => {
     let hasRun = false;
 
@@ -155,25 +157,22 @@ export default function WritingGame() {
           },
         }
       );
-
-      setTimeout(() => {
-        toast.info("6 minutes remaining");
-      }, 120000);
-      setTimeout(() => {
-        toast.info("4 minutes remaining");
-      }, 240000);
-      setTimeout(() => {
-        toast.info("2 minutes remaining");
-      }, 360000);
-      setTimeout(() => {
-        console.log("Triggering anky image request");
-        sendAnkyImageRequest();
-      }, 420000);
-
-      // Handle successful response
-      if (response.data) {
-        // Do something with the response if needed
-        return response.data;
+      if (response.data.success) {
+        setTimeout(() => {
+          toast.info("6 minutes remaining");
+        }, 120000);
+        setTimeout(() => {
+          toast.info("4 minutes remaining");
+        }, 240000);
+        setTimeout(() => {
+          toast.info("2 minutes remaining");
+        }, 360000);
+        setTimeout(() => {
+          console.log("Triggering anky image request");
+          sendAnkyImageRequest();
+        }, 420000);
+      } else {
+        console.log("the session was not started successfully");
       }
     } catch (error) {
       console.error("Error starting session:", error);
@@ -321,7 +320,9 @@ export default function WritingGame() {
           token_name: response.data.token_name,
           image_ipfs_hash: response.data.image_ipfs_hash,
           description: response.data.reflection_to_user,
-          image_cloudinary_url: response.data.image_cloudinary_url,
+          image_cloudinary_url:
+            response.data?.image_cloudinary_url ||
+            "https://github.com/jpfraneto/images/blob/main/anky.png?raw=true",
         });
         setAnkyMetadataRequestPending(false);
       }
@@ -365,7 +366,6 @@ export default function WritingGame() {
         "the response from ending the writing session is: ",
         response
       );
-      // todo: here we should get the reply from anky based on the session stats
       setFinalCastText(response.data.new_cast_text);
       setProcessingCastText(false);
       return response.data;
@@ -423,6 +423,42 @@ export default function WritingGame() {
     }
   };
 
+  const addFrame = useCallback(async () => {
+    console.log("Adding frame...");
+    try {
+      // setAddFrameResult("");
+
+      console.log("Calling sdk.actions.addFrame()...");
+      const result = await sdk.actions.addFrame();
+      console.log("addFrame result:", result);
+
+      if (result.added) {
+        console.log("Frame was added successfully");
+        if (result.notificationDetails) {
+          console.log("Got notification details:", result.notificationDetails);
+        }
+        setAddFrameResult(result.notificationDetails ? `Success` : "Success");
+        console.log("THE USER FID IS: ", context?.user.fid);
+        const response = await axios.post(
+          "https://farcaster.anky.bot/register-user-for-notifications",
+          {
+            fid: context?.user.fid,
+            token: result.notificationDetails?.token,
+            url: result.notificationDetails?.url,
+            targetUrl: window.location.href,
+          }
+        );
+        console.log("the response012992-0a-------- is: ", response);
+      } else {
+        console.log("Frame was not added. Reason:", result.reason);
+        setAddFrameResult(`Not added: ${result.reason}`);
+      }
+    } catch (error) {
+      console.error("Error adding frame:", error);
+      setAddFrameResult(`Error: ${error}`);
+    }
+  }, []);
+
   if (!address)
     return (
       <div className="flex flex-col items-center justify-center h-full text-white text-2xl p-4">
@@ -454,9 +490,12 @@ export default function WritingGame() {
       sessionStartTimestamp,
       isFarcasterClient
     );
-    if (elapsedTime >= SESSION_TIMEOUT && isFarcasterClient) {
+    if (elapsedTime >= SESSION_TIMEOUT) {
       return (
         <UserWonTheGame
+          sessionLongString={sessionLongString}
+          context={context!}
+          setAnkyMetadata={setAnkyMetadata}
           ankyMetadata={ankyMetadata!}
           deployAnky={deployAnky}
           ankyMetadataRequestPending={ankyMetadataRequestPending}
@@ -470,6 +509,8 @@ export default function WritingGame() {
           context={context!}
           finalCastText={finalCastText}
           processingCastText={processingCastText}
+          addFrame={addFrame}
+          addFrameResult={addFrameResult}
         />
       );
     }
@@ -502,24 +543,105 @@ export default function WritingGame() {
 function UserWonTheGame({
   deployAnky,
   ankyMetadata,
+  setAnkyMetadata,
   ankyMetadataRequestPending,
+  sessionLongString,
+  context,
 }: {
   deployAnky: () => void;
   ankyMetadata: AnkyMetadata;
+  setAnkyMetadata: (ankyMetadata: AnkyMetadata) => void;
   ankyMetadataRequestPending: boolean;
+  sessionLongString: string;
+  context: FrameContext;
 }) {
   if (ankyMetadataRequestPending) {
     return (
       <div className="flex flex-col items-center justify-center h-full pt-8">
         <p>you wrote an anky</p>
         <p>it is being generated as you read these words</p>
+        <p>
+          if you think something went wrong, please please click this button:
+        </p>
+        <button
+          onClick={async () => {
+            const btn = document.querySelector(".psychedelic-btn");
+            btn?.classList.add("animate");
+            setTimeout(() => btn?.classList.remove("animate"), 2000);
+            const options = {
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              method: "POST",
+              url: `https://farcaster.anky.bot/framesgiving/generate-anky-image-from-session-long-string`,
+              data: {
+                session_long_string: sessionLongString,
+                fid: context?.user.fid,
+              },
+              timeout: 70000, // 70 second timeout to account for the long processing time
+            };
+            const response = await axios.request(options);
+            console.log("the response is: ", response.data);
+            if (response.data) {
+              setAnkyMetadata({
+                ticker: response.data.ticker,
+                token_name: response.data.token_name,
+                image_ipfs_hash: response.data.image_ipfs_hash,
+                description: response.data.reflection_to_user,
+                image_cloudinary_url:
+                  response?.data?.image_cloudinary_url ||
+                  "https://github.com/jpfraneto/images/blob/main/anky.png?raw=true",
+              });
+            }
+          }}
+          className="psychedelic-btn relative w-16 h-16 rounded-full overflow-hidden transition-all duration-500 hover:scale-105"
+          style={{
+            background: `radial-gradient(circle at center, 
+              #ff0000,
+              #ff0000)`,
+          }}
+        >
+          <style jsx>{`
+            .psychedelic-btn.animate {
+              animation: psychedelic 2s ease infinite;
+            }
+            @keyframes psychedelic {
+              0% {
+                background: radial-gradient(circle at center, #ff0000, #ff0000);
+              }
+              25% {
+                background: radial-gradient(circle at center, #ff00ff, #00ff00);
+              }
+              50% {
+                background: radial-gradient(circle at center, #00ff00, #0000ff);
+              }
+              75% {
+                background: radial-gradient(circle at center, #ffff00, #ff00ff);
+              }
+              100% {
+                background: radial-gradient(circle at center, #ff0000, #ff0000);
+              }
+            }
+          `}</style>
+          <svg
+            viewBox="0 0 24 24"
+            className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+            fill="white"
+          >
+            <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
+          </svg>
+        </button>
       </div>
     );
   }
   return (
     <div className="flex flex-col items-center justify-center h-full pt-8">
       <Image
-        src={ankyMetadata.image_cloudinary_url}
+        src={
+          ankyMetadata?.image_cloudinary_url ||
+          "https://github.com/jpfraneto/images/blob/main/anky.png?raw=true"
+        }
         alt="anon"
         width={300}
         height={300}
@@ -623,12 +745,16 @@ function SessionComplete({
   context,
   finalCastText,
   processingCastText,
+  addFrame,
+  addFrameResult,
 }: {
   sessionLongString: string;
   onReset: (context: FrameContext) => void;
   context: FrameContext;
   finalCastText: string | null;
   processingCastText: boolean;
+  addFrame: () => void;
+  addFrameResult: string;
 }) {
   const sessionData = extractSessionDataFromLongString(sessionLongString);
   console.log("the session data is: ", sessionData);
@@ -670,6 +796,90 @@ function SessionComplete({
         finalCastText={finalCastText}
         processingCastText={processingCastText}
       />
+
+      <button
+        onClick={addFrame}
+        className="relative w-full py-4 px-6 text-xl font-bold text-white rounded-lg mt-8 overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95"
+        style={{
+          background: "linear-gradient(45deg, #ff00ff, #00ffff, #ff00ff)",
+          backgroundSize: "200% 200%",
+          animation: "gradient 3s ease infinite",
+        }}
+      >
+        <style jsx>{`
+          @keyframes gradient {
+            0% {
+              background-position: 0% 50%;
+            }
+            50% {
+              background-position: 100% 50%;
+            }
+            100% {
+              background-position: 0% 50%;
+            }
+          }
+          button:active {
+            animation: pulse 0.3s ease-in-out;
+          }
+          @keyframes pulse {
+            0% {
+              transform: scale(0.95);
+            }
+            50% {
+              transform: scale(1.05);
+            }
+            100% {
+              transform: scale(0.95);
+            }
+          }
+        `}</style>
+        <div className="relative z-10">
+          {addFrameResult ? (
+            <span className="animate-bounce">{addFrameResult}</span>
+          ) : (
+            <span>get anky notifications ✨</span>
+          )}
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 animate-pulse" />
+        <button
+          onClick={async () => {
+            try {
+              console.log("+++++++++++++++++");
+              console.log("+++++++++++++++++");
+              console.log("+++++++++++++++++");
+              console.log("+++++++++++++++++");
+              console.log("+++++++++++++++++");
+              console.log("the fid is: ", context?.user.fid);
+              console.log("+++++++++++++++++");
+              console.log("+++++++++++++++++");
+              console.log("+++++++++++++++++");
+              console.log("+++++++++++++++++");
+
+              const newSessionLongString = `16098\n1298312-231231-23123-21321\ntell me who you are\n17039218329\ni 0.845\n 0.267\nl 0.789\ni 0.634\nk 0.756\ne 0.823\n 0.456\np 0.923\ni 0.445\nz 0.867\nz 1.234\na 0.756\n 0.845\na 0.634\nn 0.756\nd 0.823\n 0.445\ni 0.756\nc 0.845\ne 0.634\n 0.756\nc 0.823\nr 0.445\ne 0.867\na 0.756\nm 0.923\n17039213832\n! 0.845`;
+              const options = {
+                headers: {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+                method: "POST",
+                url: `https://farcaster.anky.bot/framesgiving/generate-anky-image-from-session-long-string`,
+                data: {
+                  session_long_string: newSessionLongString,
+                  fid: 16098,
+                },
+                timeout: 70000, // 70 second timeout to account for the long processing time
+              };
+              console.log("THE OPTIONS ARE: ", options);
+              const response = await axios.request(options);
+              console.log("THE RESPONSE.data IS: ", response.data);
+            } catch (error) {
+              console.error("the error is: ", error);
+            }
+          }}
+        >
+          get anky
+        </button>
+      </button>
     </div>
   );
 }
@@ -738,35 +948,6 @@ function SessionCompleteButtons({
       </button>
     </div>
   );
-}
-
-export async function ankyEditUserWriting(
-  sessionLongString: string,
-  fid: number
-) {
-  console.log("editing user writing");
-  // todo: needs to be less than 1000 characters long
-  try {
-    const options = {
-      method: "POST",
-      url: `https://poiesis.anky.bot/framesgiving/edit-user-writing`,
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      data: {
-        fid,
-        session_long_string: sessionLongString,
-      },
-    };
-    const response = await axios.request(options);
-    console.log("the response is: ", response);
-    return response.data;
-  } catch (error) {
-    console.error("Error editing user writing:", error);
-    // todo: send to claude or chatgtp
-    return { cast_text: "hello world, this is the edited cast text" };
-  }
 }
 
 interface SessionData {

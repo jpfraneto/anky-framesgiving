@@ -6,9 +6,15 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "warpcast.com",
+        hostname: "*",
         port: "",
-        pathname: "/og-logo.png",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "cloudinary.com",
+        port: "",
+        pathname: "/**",
       },
     ],
   },
