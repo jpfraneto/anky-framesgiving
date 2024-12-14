@@ -1,8 +1,8 @@
-this repo was cloned from the [farcaster frames v2 by horsefacts](https://github.com/farcasterxyz/frames-v2-demo)
+this repo was cloned from the [farcaster frames v2 repo](https://github.com/farcasterxyz/frames-v2-demo)
 
-it talks to this contract, on base mainnet:
+it talks to this contract, on degen chain:
 
-[0x699367a44d8ffc90e0cd07cbab218174d13f7e55](https://basescan.org/address/0x699367a44d8ffc90e0cd07cbab218174d13f7e55#code)
+[0xbc25ea092e9bed151fd1947ee1cf957cfdd580ef](https://explorer.degen.tips/address/0xbc25ea092e9bed151fd1947ee1cf957cfdd580ef#code)
 
 the splash image is [here](https://github.com/jpfraneto/images/blob/main/splash222.png?raw=true)
 

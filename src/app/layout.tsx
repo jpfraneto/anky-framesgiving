@@ -28,7 +28,7 @@ export default function RootLayout({
           content="upgrade-insecure-requests"
         />
       </head>
-      <body className={comicSans.className}>
+      <body className={`${comicSans.className} h-full`}>
         <Providers>{children}</Providers>
       </body>
     </html>

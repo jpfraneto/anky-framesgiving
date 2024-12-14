@@ -7,13 +7,13 @@ const frame = {
   version: "next",
   imageUrl: `https://github.com/jpfraneto/images/blob/main/banner-2-anky.png?raw=true`,
   button: {
-    title: "write",
+    title: "Anky",
     action: {
       type: "launch_frame",
-      name: "write",
+      name: '"write"',
       url: appUrl,
       splashImageUrl: `https://github.com/jpfraneto/images/blob/main/splash222.png?raw=true`,
-      splashBackgroundColor: "#CEA2FD",
+      splashBackgroundColor: "#000000",
     },
   },
 };

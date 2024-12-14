@@ -14,8 +14,28 @@
   }
 }
 
+html,
+body {
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: 'Inter', Helvetica, Arial, sans-serif;
+  background: #000000;
+  font-family: "Comic Sans MS", Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+#__next,
+main {
+  flex: 1;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
 }

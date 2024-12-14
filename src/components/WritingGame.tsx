@@ -7,10 +7,8 @@ import {
   ChangeEvent,
 } from "react";
 import sdk, { type FrameContext } from "@farcaster/frame-sdk";
-import { useAccount, useWriteContract } from "wagmi";
-import { Wand2, RefreshCw } from "lucide-react";
-
-import ankyFramesgivingAbi from "../lib/ankyFramesgivingAbi.json";
+import { useAccount } from "wagmi";
+import { Rocket, RefreshCw, Wand2 } from "lucide-react";
 
 import axios from "axios";
 import Image from "next/image";
@@ -21,8 +19,8 @@ import "react-toastify/dist/ReactToastify.css";
 
 const SESSION_TIMEOUT = 8 * 60 * 1000; // 8 minutes
 
-const ANKY_FRAMESGIVING_CONTRACT_ADDRESS =
-  "0x699367a44d8ffc90e0cd07cbab218174d13f7e55";
+// const ANKY_FRAMESGIVING_CONTRACT_ADDRESS =
+//   "0xBc25EA092e9BEd151FD1947eE1Cf957cfdd580ef";
 
 type AnkyMetadata = {
   ticker: string;
@@ -40,10 +38,12 @@ export default function WritingGame() {
   const [writingSessionEnded, setWritingSessionEnded] = useState(false);
   const [resettingSession, setResettingSession] = useState(false);
   const [sessionLongString, setSessionLongString] = useState("");
+  const [sessionIpfsHash, setSessionIpfsHash] = useState("");
   const [text, setText] = useState("");
   const [prompt, setPrompt] = useState("");
   const [sessionActive, setSessionActive] = useState(false);
   const [timeLeft, setTimeLeft] = useState(8000);
+  const [idempotencyKey, setIdempotencyKey] = useState("");
 
   const [isFarcasterClient, setIsFarcasterClient] = useState(false);
   const [ankyMetadataRequestPending, setAnkyMetadataRequestPending] =
@@ -53,12 +53,15 @@ export default function WritingGame() {
     number | null
   >(null);
   const [ankyMetadata, setAnkyMetadata] = useState<AnkyMetadata | null>(null);
+  const [isDeployingAnky, setIsDeployingAnky] = useState(false);
 
   const { address } = useAccount();
-  const { writeContract } = useWriteContract();
 
   const lastKeystrokeTimeRef = useRef<number | null>(null);
   const keystrokeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const sixMinTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fourMinTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const twoMinTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // SDK state
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
@@ -83,15 +86,12 @@ export default function WritingGame() {
         );
 
         const data = response.data;
-        console.log("THE DATA IS");
-        console.log("THE DATA IS");
-        console.log("THE DATA IS");
-        console.log("THE DATA IS");
-        console.log(data);
-        console.log("THE DATA IS");
-        console.log("THE DATA IS");
-        console.log("THE DATA IS");
-        console.log("THE DATA IS");
+        console.log(
+          "setting up the data session long string",
+          data.session_long_string
+        );
+
+        setSessionLongString(data.session_long_string);
 
         const parsedLongString = data.session_long_string.split("\n");
         // const fid = parsedLongString[0];
@@ -112,10 +112,11 @@ export default function WritingGame() {
     console.log("THE RESET SESSION FUNCTION IS RUNNING NOW");
     setText("");
     setSessionActive(false);
-    setTimeLeft(8000);
+    setTimeLeft(0);
     setSessionLongString("");
     setWritingSessionEnded(false);
     setSessionStartTimestamp(new Date().getTime());
+
     if (keystrokeTimeoutRef.current) {
       clearTimeout(keystrokeTimeoutRef.current);
     }
@@ -129,7 +130,7 @@ export default function WritingGame() {
       setPrompt("tell us who you are");
       setSessionId(crypto.randomUUID());
     }
-  }, []);
+  }, [context, address, prepareWritingSession]);
 
   const startSession = async () => {
     setSessionActive(true);
@@ -143,12 +144,15 @@ export default function WritingGame() {
 
       console.log("Starting session", context, address, sessionId);
 
+      const newIdempotencyKey = crypto.randomUUID();
+      setIdempotencyKey(newIdempotencyKey);
+
       const response = await axios.post(
         "https://farcaster.anky.bot/framesgiving/start-writing-session",
         {
           fid: context.user.fid,
           userWallet: address,
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: newIdempotencyKey,
           session_id: sessionId,
         },
         {
@@ -158,19 +162,17 @@ export default function WritingGame() {
         }
       );
       if (response.data.success) {
-        setTimeout(() => {
+        sixMinTimeoutRef.current = setTimeout(() => {
           toast.info("6 minutes remaining");
         }, 120000);
-        setTimeout(() => {
+        fourMinTimeoutRef.current = setTimeout(() => {
           toast.info("4 minutes remaining");
         }, 240000);
-        setTimeout(() => {
+        twoMinTimeoutRef.current = setTimeout(() => {
           toast.info("2 minutes remaining");
         }, 360000);
-        setTimeout(() => {
-          console.log("Triggering anky image request");
-          sendAnkyImageRequest();
-        }, 420000);
+
+        // Store timeouts so they can be cleared when session ends
       } else {
         console.log("the session was not started successfully");
       }
@@ -209,14 +211,14 @@ export default function WritingGame() {
         await prepareWritingSession(sdkContext, address || "");
         console.log("Prepared writing session");
 
-        sdk.actions.ready();
+        sdk.actions.ready({});
         console.log("Called sdk.actions.ready()");
       } catch (error) {
         console.log("Error in load function:", error);
         setIsFarcasterClient(false);
         setPrompt("tell us who you are");
         setSessionId(crypto.randomUUID());
-        sdk.actions.ready();
+        sdk.actions.ready({});
         console.log("Set fallback values after error");
       }
     };
@@ -233,6 +235,12 @@ export default function WritingGame() {
         const remaining = Math.max(0, 8000 - elapsed);
         setTimeLeft(remaining);
 
+        // if (elapsed >= 360000) {
+        //   // 6 minutes = 360000 milliseconds
+        //   console.log("inside the elapsed, sending the anky image request");
+        //   sendAnkyImageRequest();
+        // }
+
         if (remaining === 0) {
           clearInterval(interval);
         }
@@ -242,6 +250,7 @@ export default function WritingGame() {
       if (interval) clearInterval(interval);
     };
   }, [lastKeystrokeTimestamp, writingSessionEnded]);
+
   const handleTextChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     console.log("Handling text change");
     const currentTime = Date.now();
@@ -267,7 +276,6 @@ export default function WritingGame() {
     // Calculate time delta
     const timeDelta =
       currentTime - (lastKeystrokeTimeRef.current ?? currentTime);
-    console.log("Time delta:", timeDelta);
 
     // Add keystroke data to session long string
     setSessionLongString(
@@ -278,27 +286,27 @@ export default function WritingGame() {
 
     const timeout = setTimeout(() => {
       console.log("Session timeout reached");
-      const finalSessionLongString =
-        `${
-          context?.user.fid || 16098
-        }\n${sessionId}\n${prompt}\n${currentTime}` + sessionLongString;
-      console.log("Final session string:", finalSessionLongString);
-      setSessionLongString(finalSessionLongString);
+
       setWritingSessionEnded(true);
       if (address) {
         console.log("Sending session to server");
-        endWritingSession(finalSessionLongString, address);
+
+        endWritingSession(sessionLongString, address);
+        const sessionData = extractSessionDataFromLongString(sessionLongString);
+        if (sessionData.total_time_written > 479999) {
+          sendAnkyImageRequest();
+        }
       }
     }, 8000);
 
     keystrokeTimeoutRef.current = timeout;
   };
-  const ankyverseStart = new Date("2023-08-10T05:00:00-04:00");
-  console.log("The ankyverse start date is: ", ankyverseStart.getTime());
 
   const sendAnkyImageRequest = async () => {
     try {
+      if (ankyMetadataRequestPending || ankyMetadata?.token_name) return;
       setAnkyMetadataRequestPending(true);
+
       const options = {
         headers: {
           "Content-Type": "application/json",
@@ -309,8 +317,9 @@ export default function WritingGame() {
         data: {
           session_long_string: sessionLongString,
           fid: context?.user.fid,
+          idempotency_key: idempotencyKey,
         },
-        timeout: 70000, // 70 second timeout to account for the long processing time
+        timeout: 88888, // 88 second timeout to account for the long processing time
       };
       const response = await axios.request(options);
       console.log("the response is: ", response.data);
@@ -338,17 +347,22 @@ export default function WritingGame() {
     }
   };
 
+  const clearTimeoutRefs = () => {
+    if (sixMinTimeoutRef.current) clearTimeout(sixMinTimeoutRef.current);
+    if (fourMinTimeoutRef.current) clearTimeout(fourMinTimeoutRef.current);
+    if (twoMinTimeoutRef.current) clearTimeout(twoMinTimeoutRef.current);
+  };
+
   const endWritingSession = async (
     sessionLongString: string,
     address: string
   ) => {
     try {
-      const sessionData = extractSessionDataFromLongString(sessionLongString);
-      if (sessionData.total_time_written < 480000) {
-        setFinalCastText(text);
-        setProcessingCastText(false);
-        return;
-      }
+      clearTimeoutRefs();
+      console.log("ENDING THE WRITING SESSIon");
+      console.log("the session long string is: ", sessionLongString);
+      console.log("the address is: ", address);
+      console.log("the fid is: ", context?.user.fid);
       const response = await axios.post(
         "https://farcaster.anky.bot/framesgiving/end-writing-session",
         {
@@ -366,7 +380,8 @@ export default function WritingGame() {
         "the response from ending the writing session is: ",
         response
       );
-      setFinalCastText(response.data.new_cast_text);
+      setSessionIpfsHash(response.data.ipfs_hash);
+      setFinalCastText(text);
       setProcessingCastText(false);
       return response.data;
     } catch (error) {
@@ -374,11 +389,10 @@ export default function WritingGame() {
     }
   };
 
-  const deployAnky = async () => {
-    if (!isFarcasterClient) {
-      toast.error("Please access this from a Farcaster client");
-      return;
-    }
+  const deployAnky = async (): Promise<string | undefined> => {
+    console.log("going to deploy the anky now");
+    setIsDeployingAnky(true);
+    console.log("the anky metadata is: ", ankyMetadata);
 
     try {
       if (!ankyMetadata?.image_ipfs_hash) {
@@ -394,28 +408,44 @@ export default function WritingGame() {
         return;
       }
 
-      toast.info(
-        "Deploying your Anky. This is probably not ready yet but who knows what will happen...",
+      // Check if all required variables are set
+      if (!sessionIpfsHash) {
+        toast.error("No session IPFS hash found");
+        return;
+      }
+      if (!ankyMetadata.image_cloudinary_url) {
+        toast.error("No image URL found");
+        return;
+      }
+      if (!address) {
+        toast.error("No writer address found");
+        return;
+      }
+      if (!sessionId) {
+        toast.error("No session ID found");
+        return;
+      }
+      if (!context?.user.fid) {
+        toast.error("No writer FID found");
+        return;
+      }
+
+      const response = await axios.post(
+        "https://farcaster.anky.bot/framesgiving/deploy-anky",
         {
-          autoClose: false,
-          toastId: "deploying",
+          writing_session_ipfs_hash: sessionIpfsHash,
+          image_url: ankyMetadata.image_cloudinary_url,
+          ticker: ankyMetadata.ticker,
+          token_name: ankyMetadata.token_name,
+          description: ankyMetadata.description,
+          writer_address: address,
+          session_id: sessionId,
+          image_ipfs_hash: ankyMetadata.image_ipfs_hash,
+          writer_fid: context?.user.fid,
         }
       );
-
-      const responseFromContract = await writeContract({
-        abi: ankyFramesgivingAbi,
-        address: ANKY_FRAMESGIVING_CONTRACT_ADDRESS,
-        functionName: "deployAnky",
-        args: [
-          ankyMetadata.image_ipfs_hash,
-          ankyMetadata.ticker,
-          ankyMetadata.token_name,
-        ],
-      });
-
-      toast.dismiss("deploying");
-      toast.success("Anky deployed successfully!");
-      return responseFromContract;
+      console.log("the response from the deploy anky is: ", response.data);
+      return response.data.cast_hash;
     } catch (error) {
       toast.dismiss("deploying");
       toast.error("Failed to deploy Anky");
@@ -457,7 +487,7 @@ export default function WritingGame() {
       console.error("Error adding frame:", error);
       setAddFrameResult(`Error: ${error}`);
     }
-  }, []);
+  }, [context]);
 
   if (!address)
     return (
@@ -499,6 +529,8 @@ export default function WritingGame() {
           ankyMetadata={ankyMetadata!}
           deployAnky={deployAnky}
           ankyMetadataRequestPending={ankyMetadataRequestPending}
+          isDeployingAnky={isDeployingAnky}
+          setIsDeployingAnky={setIsDeployingAnky}
         />
       );
     } else {
@@ -517,7 +549,7 @@ export default function WritingGame() {
   }
 
   return (
-    <div className="flex flex-col w-full h-[380px]">
+    <div className="flex flex-col w-full h-full">
       <ToastContainer
         position="top-right"
         autoClose={1618}
@@ -547,110 +579,360 @@ function UserWonTheGame({
   ankyMetadataRequestPending,
   sessionLongString,
   context,
+  isDeployingAnky,
+  setIsDeployingAnky,
 }: {
-  deployAnky: () => void;
+  deployAnky: () => Promise<string | undefined>;
   ankyMetadata: AnkyMetadata;
   setAnkyMetadata: (ankyMetadata: AnkyMetadata) => void;
   ankyMetadataRequestPending: boolean;
   sessionLongString: string;
   context: FrameContext;
+  isDeployingAnky: boolean;
+  setIsDeployingAnky: (isDeployingAnky: boolean) => void;
 }) {
+  const [progress, setProgress] = useState(0);
+  const [displayedChars, setDisplayedChars] = useState("");
+  const [generatingAnkyFallback, setGeneratingAnkyFallback] = useState(false);
+  const [deployedAnkyCastHash, setDeployedAnkyCastHash] = useState("");
+
+  const session_data = extractSessionDataFromLongString(sessionLongString);
+
+  useEffect(() => {
+    const startTime = Date.now();
+    const duration = 88000; // 88 seconds
+
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const newProgress = Math.min((elapsed / duration) * 100, 100);
+      setProgress(newProgress);
+
+      if (newProgress >= 100) {
+        clearInterval(progressInterval);
+      }
+    }, 100);
+
+    // Parse the typing data
+    const typingData = sessionLongString
+      .split("\n")
+      .slice(4) // Start after the metadata lines
+      .map((line) => {
+        const leadingSpaces = line.match(/^\s*/)?.[0]?.length ?? 0;
+        if (leadingSpaces > 0) {
+          return {
+            char: " ",
+            interval: parseFloat(line.trim()) * 100, // Convert to ms and speed up 10x
+          };
+        }
+
+        const [char, timeStr] = line.split(/\s+/);
+        if (!char || !timeStr) return null;
+
+        if (char === "Enter") {
+          return {
+            char: "\n",
+            interval: parseFloat(timeStr) * 100,
+          };
+        }
+
+        if (char === "Backspace") {
+          return {
+            char: "BACKSPACE",
+            interval: parseFloat(timeStr) * 100,
+          };
+        }
+
+        return {
+          char: char,
+          interval: parseFloat(timeStr) * 100,
+        };
+      })
+      .filter(Boolean);
+
+    let currentIndex = 0;
+    let timeoutId: NodeJS.Timeout;
+    let currentText = "";
+
+    const streamNextChar = () => {
+      if (currentIndex >= typingData.length) return;
+
+      const currentData = typingData[currentIndex];
+      if (!currentData) return;
+
+      const { char, interval } = currentData;
+
+      if (char === "BACKSPACE") {
+        currentText = currentText.slice(0, -1);
+      } else {
+        currentText += char;
+      }
+
+      setDisplayedChars(currentText);
+      currentIndex++;
+
+      if (currentIndex < typingData.length) {
+        timeoutId = setTimeout(streamNextChar, interval);
+      }
+    };
+
+    streamNextChar();
+
+    return () => {
+      clearInterval(progressInterval);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [sessionLongString]);
+
   if (ankyMetadataRequestPending) {
     return (
-      <div className="flex flex-col items-center justify-center h-full pt-8">
-        <p>you wrote an anky</p>
-        <p>it is being generated as you read these words</p>
-        <p>
-          if you think something went wrong, please please click this button:
-        </p>
-        <button
-          onClick={async () => {
-            const btn = document.querySelector(".psychedelic-btn");
-            btn?.classList.add("animate");
-            setTimeout(() => btn?.classList.remove("animate"), 2000);
-            const options = {
-              headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-              },
-              method: "POST",
-              url: `https://farcaster.anky.bot/framesgiving/generate-anky-image-from-session-long-string`,
-              data: {
-                session_long_string: sessionLongString,
-                fid: context?.user.fid,
-              },
-              timeout: 70000, // 70 second timeout to account for the long processing time
-            };
-            const response = await axios.request(options);
-            console.log("the response is: ", response.data);
-            if (response.data) {
+      <div className="min-h-screen bg-gradient-to-b from-purple-900 via-purple-800 to-indigo-900 p-6 flex flex-col items-center justify-center text-white space-y-8">
+        <h2 className="text-3xl font-bold text-center mb-8">
+          Congratulations on completing your writing session! 🎉
+        </h2>
+        <small>
+          your flow score was {Math.round(session_data?.flow_score || 0)}%
+        </small>
+
+        <div className="w-full bg-black/30 backdrop-blur-sm rounded-xl p-6 shadow-2xl border border-white/10 overflow-hidden ">
+          <div className="h-48 overflow-hidden mb-4 font-mono text-sm w-full">
+            <div className="animate-float wrap w-full overflow-y-scroll">
+              {displayedChars}
+            </div>
+          </div>
+
+          <div className="w-full bg-gray-700 rounded-full h-4 mt-4">
+            <div
+              className="h-full bg-gradient-to-r from-pink-500 to-violet-500 rounded-full transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          <p className="text-center mt-4">
+            Your anky is being generated... {Math.round(progress)}%
+          </p>
+        </div>
+      </div>
+    );
+  }
+  if (!ankyMetadata) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-purple-900 via-purple-800 to-indigo-900 p-6 flex flex-col items-center justify-center text-white space-y-8">
+        <div className="max-w-md w-full bg-black/30 backdrop-blur-sm rounded-xl p-8 shadow-2xl border border-white/10">
+          <div className="space-y-4 text-lg">
+            <p className="leading-relaxed">
+              There was an error generating your anky. Please try again.
+            </p>
+
+            <div className="pl-4 space-y-3">
+              <p className="flex items-start">
+                <span className="text-pink-400 mr-2">
+                  (the process takes about 88 seconds. please be patient)
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={async () => {
+              setGeneratingAnkyFallback(true);
+              const response = await axios.post(
+                `https://farcaster.anky.bot/framesgiving/generate-anky-image-from-session-long-string`,
+                {
+                  session_long_string: sessionLongString,
+                  fid: context?.user.fid,
+                }
+              );
+              console.log(
+                "the response from asking for the anky is: ",
+                response.data
+              );
               setAnkyMetadata({
                 ticker: response.data.ticker,
                 token_name: response.data.token_name,
                 image_ipfs_hash: response.data.image_ipfs_hash,
                 description: response.data.reflection_to_user,
                 image_cloudinary_url:
-                  response?.data?.image_cloudinary_url ||
+                  response.data?.image_cloudinary_url ||
                   "https://github.com/jpfraneto/images/blob/main/anky.png?raw=true",
               });
-            }
-          }}
-          className="psychedelic-btn relative w-16 h-16 rounded-full overflow-hidden transition-all duration-500 hover:scale-105"
-          style={{
-            background: `radial-gradient(circle at center, 
-              #ff0000,
-              #ff0000)`,
-          }}
-        >
-          <style jsx>{`
-            .psychedelic-btn.animate {
-              animation: psychedelic 2s ease infinite;
-            }
-            @keyframes psychedelic {
-              0% {
-                background: radial-gradient(circle at center, #ff0000, #ff0000);
-              }
-              25% {
-                background: radial-gradient(circle at center, #ff00ff, #00ff00);
-              }
-              50% {
-                background: radial-gradient(circle at center, #00ff00, #0000ff);
-              }
-              75% {
-                background: radial-gradient(circle at center, #ffff00, #ff00ff);
-              }
-              100% {
-                background: radial-gradient(circle at center, #ff0000, #ff0000);
-              }
-            }
-          `}</style>
-          <svg
-            viewBox="0 0 24 24"
-            className="w-8 h-8 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-            fill="white"
+              setGeneratingAnkyFallback(false);
+            }}
+            className={`mt-8 w-full py-4 px-6 bg-gradient-to-r from-pink-500 to-violet-500 rounded-lg font-bold text-lg transform transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30 active:scale-95 ${
+              generatingAnkyFallback ? "animate-pulse hover:animate-none" : ""
+            }`}
           >
-            <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
-          </svg>
-        </button>
+            {generatingAnkyFallback ? "Generating Anky..." : "Generate My Anky"}
+          </button>
+          {generatingAnkyFallback && (
+            <div className="w-full mt-4">
+              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-pink-500 to-violet-500 transition-all duration-[88000ms] ease-linear"
+                  style={{
+                    width: "100%",
+                    transform: "translateX(-100%)",
+                    animation: "fillProgress 88s linear forwards",
+                  }}
+                />
+              </div>
+              <style jsx>{`
+                @keyframes fillProgress {
+                  from {
+                    transform: translateX(-100%);
+                  }
+                  to {
+                    transform: translateX(0);
+                  }
+                }
+              `}</style>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
   return (
-    <div className="flex flex-col items-center justify-center h-full pt-8">
-      <Image
-        src={
-          ankyMetadata?.image_cloudinary_url ||
-          "https://github.com/jpfraneto/images/blob/main/anky.png?raw=true"
-        }
-        alt="anon"
-        width={300}
-        height={300}
-      />
-      <p className="text-white text-2xl">${ankyMetadata.ticker}</p>
-      <p className="text-white text-3xl">{ankyMetadata.token_name}</p>
-      <div className="text-white text-2xl">
-        <button onClick={deployAnky}>deploy anky</button>
+    <div className="bg-purple-500 p-4 rounded-lg flex flex-col items-center gap-4 h-full">
+      <div className="relative flex flex-col items-center justify-center rounded-lg overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-500/30 to-pink-500/30 animate-pulse blur-xl" />
+        <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 via-transparent to-purple-500/20 animate-spin-slow blur-lg" />
+        <div className="relative rounded-lg overflow-hidden border-4 border-white/50 shadow-[0_0_30px_rgba(255,255,255,0.4)] animate-fadeIn">
+          <Image
+            src={
+              ankyMetadata?.image_cloudinary_url ||
+              "https://github.com/jpfraneto/images/blob/main/anky.png?raw=true"
+            }
+            alt="anon"
+            width={300}
+            height={300}
+            className="animate-scaleIn"
+          />
+          <a
+            href={
+              ankyMetadata?.image_cloudinary_url ||
+              "https://github.com/jpfraneto/images/blob/main/anky.png?raw=true"
+            }
+            download
+            className="absolute bottom-2 right-2 bg-white/30 hover:bg-white/50 p-2 rounded-full backdrop-blur-sm transition-all duration-200 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-white"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          </a>
+        </div>
       </div>
+      <div className="flex flex-col items-center justify-center mt-6 space-y-4">
+        <p className="text-white text-4xl font-bold tracking-wider animate-pulse-scale">
+          ${ankyMetadata?.ticker || "something went wrong"}
+        </p>
+        <p className="text-white/90 text-xl italic text-center max-w-md leading-relaxed bg-white/10 px-6 py-3 rounded-lg backdrop-blur-sm">
+          {ankyMetadata?.token_name || "something went wrong"}
+        </p>
+      </div>
+      <style jsx>{`
+        @keyframes spin-slow {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        @keyframes scaleIn {
+          from {
+            transform: scale(1.2);
+            filter: blur(10px);
+          }
+          to {
+            transform: scale(1);
+            filter: blur(0);
+          }
+        }
+        @keyframes pulse-scale {
+          0%,
+          100% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.1);
+          }
+        }
+        .animate-spin-slow {
+          animation: spin-slow 20s linear infinite;
+        }
+        .animate-fadeIn {
+          animation: fadeIn 1s ease-out forwards;
+        }
+        .animate-scaleIn {
+          animation: scaleIn 1.5s ease-out forwards;
+        }
+        .animate-pulse-scale {
+          animation: pulse-scale 2s ease-in-out infinite;
+        }
+      `}</style>
+
+      {deployedAnkyCastHash ? (
+        <button
+          onClick={() =>
+            sdk.actions.openUrl(
+              `https://warpcast.com/~/conversations/${deployedAnkyCastHash}`
+            )
+          }
+        >
+          open deployment cast
+        </button>
+      ) : (
+        <button
+          className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 hover:rotate-1 shadow-lg hover:shadow-purple-500/50 active:scale-95 w-48 relative overflow-hidden"
+          onClick={async () => {
+            setIsDeployingAnky(true);
+            const castHash = await deployAnky();
+            setIsDeployingAnky(false);
+            if (castHash) {
+              setDeployedAnkyCastHash(castHash);
+            }
+          }}
+          disabled={isDeployingAnky}
+        >
+          {isDeployingAnky ? (
+            <div className="flex items-center justify-center gap-2 w-full">
+              <RefreshCw className="w-5 h-5 animate-spin" />
+              <span>Deploying...</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2 w-full">
+              <Rocket className="w-5 h-5 animate-bounce" />
+              <span>Deploy via Clanker</span>
+            </div>
+          )}
+        </button>
+      )}
     </div>
   );
 }
@@ -658,9 +940,13 @@ function UserWonTheGame({
 function LifeBar({ timeLeft }: { timeLeft: number }) {
   return (
     <div
-      className="h-2 bg-blue-500 transition-all duration-100"
+      className="h-2 bg-blue-500 transition-all duration-500 ease-in-out"
       style={{
         width: `${(timeLeft / 8000) * 100}%`,
+        opacity: timeLeft > 5000 ? 0 : 1,
+        boxShadow:
+          timeLeft <= 5000 ? "0 0 8px rgba(59, 130, 246, 0.6)" : "none",
+        transform: `scale(${timeLeft <= 5000 ? "1" : "0.98"})`,
       }}
     />
   );
@@ -671,9 +957,14 @@ function AnkyProgressBar({
 }: {
   sessionStartTime: number | null;
 }) {
+  const elapsedTime = sessionStartTime ? Date.now() - sessionStartTime : 0;
+  const isComplete = elapsedTime >= 480000;
+
   return (
     <div
-      className="h-4 bg-green-600 transition-all duration-100"
+      className={`h-4 transition-all duration-100 relative overflow-hidden ${
+        isComplete ? "animate-pulse" : ""
+      }`}
       style={{
         width: `${
           sessionStartTime
@@ -684,7 +975,18 @@ function AnkyProgressBar({
             : 100
         }%`,
       }}
-    />
+    >
+      {isComplete ? (
+        <>
+          <div className="absolute inset-0 animate-slide-1 bg-gradient-to-r from-purple-600 via-yellow-400 to-orange-500" />
+          <div className="absolute inset-0 animate-slide-2 bg-gradient-to-r from-orange-500 via-purple-600 to-yellow-400" />
+          <div className="absolute inset-0 animate-slide-3 bg-gradient-to-r from-yellow-400 via-orange-500 to-purple-600" />
+          <div className="absolute inset-0 animate-shimmer bg-white/20" />
+        </>
+      ) : (
+        <div className="absolute inset-0 bg-green-600" />
+      )}
+    </div>
   );
 }
 
@@ -697,12 +999,6 @@ function WritingComponent({
   prompt: string;
   handleTextChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
 }) {
-  console.log("the prompt is: ", prompt);
-  console.log("the prompt is: ", prompt);
-  console.log("the prompt is: ", prompt);
-  console.log("the prompt is: ", prompt);
-  console.log("the prompt is: ", prompt);
-  console.log("the prompt is: ", prompt);
   const [streamedPrompt, setStreamedPrompt] = useState("");
   const CHAR_DELAY = 22;
 
@@ -727,7 +1023,7 @@ function WritingComponent({
 
   return (
     <textarea
-      className="w-full grow p-4 text-gray-300 bg-black placeholder:text-gray-400 text-2xl"
+      className="w-full  h-96  md:h-full p-4 text-gray-300 bg-black placeholder:text-gray-400 text-lg sm:text-xl md:text-2xl resize-none"
       placeholder={streamedPrompt}
       autoCorrect="off"
       autoComplete="off"
@@ -757,7 +1053,7 @@ function SessionComplete({
   addFrameResult: string;
 }) {
   const sessionData = extractSessionDataFromLongString(sessionLongString);
-  console.log("the session data is: ", sessionData);
+  console.log("the session data is: ", sessionData, addFrameResult);
 
   return (
     <div className="flex flex-col items-center justify-around h-full bg-black px-8 pt-8">
@@ -796,7 +1092,6 @@ function SessionComplete({
         finalCastText={finalCastText}
         processingCastText={processingCastText}
       />
-
       <button
         onClick={addFrame}
         className="relative w-full py-4 px-6 text-xl font-bold text-white rounded-lg mt-8 overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95"
@@ -841,44 +1136,6 @@ function SessionComplete({
           )}
         </div>
         <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 animate-pulse" />
-        <button
-          onClick={async () => {
-            try {
-              console.log("+++++++++++++++++");
-              console.log("+++++++++++++++++");
-              console.log("+++++++++++++++++");
-              console.log("+++++++++++++++++");
-              console.log("+++++++++++++++++");
-              console.log("the fid is: ", context?.user.fid);
-              console.log("+++++++++++++++++");
-              console.log("+++++++++++++++++");
-              console.log("+++++++++++++++++");
-              console.log("+++++++++++++++++");
-
-              const newSessionLongString = `16098\n1298312-231231-23123-21321\ntell me who you are\n17039218329\ni 0.845\n 0.267\nl 0.789\ni 0.634\nk 0.756\ne 0.823\n 0.456\np 0.923\ni 0.445\nz 0.867\nz 1.234\na 0.756\n 0.845\na 0.634\nn 0.756\nd 0.823\n 0.445\ni 0.756\nc 0.845\ne 0.634\n 0.756\nc 0.823\nr 0.445\ne 0.867\na 0.756\nm 0.923\n17039213832\n! 0.845`;
-              const options = {
-                headers: {
-                  "Content-Type": "application/json",
-                  Accept: "application/json",
-                },
-                method: "POST",
-                url: `https://farcaster.anky.bot/framesgiving/generate-anky-image-from-session-long-string`,
-                data: {
-                  session_long_string: newSessionLongString,
-                  fid: 16098,
-                },
-                timeout: 70000, // 70 second timeout to account for the long processing time
-              };
-              console.log("THE OPTIONS ARE: ", options);
-              const response = await axios.request(options);
-              console.log("THE RESPONSE.data IS: ", response.data);
-            } catch (error) {
-              console.error("the error is: ", error);
-            }
-          }}
-        >
-          get anky
-        </button>
       </button>
     </div>
   );
@@ -935,7 +1192,6 @@ function SessionCompleteButtons({
       <button
         onClick={() => {
           onReset(context);
-          toast.info("preparing new writing session...");
         }}
         className="w-full flex items-center justify-center gap-2 
           bg-gray-700 hover:bg-gray-800 text-white font-semibold 
@@ -971,32 +1227,44 @@ export function extractSessionDataFromLongString(
   const prompt = lines[2];
   const starting_timestamp = parseInt(lines[3]);
 
-  // Process typing data starting from line 4
   let session_text = "";
   let total_time = 0;
   let total_chars = 0;
+  const intervals: number[] = [];
+
+  // Process each line starting from index 4
   for (let i = 4; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
+    const line = lines[i];
+    if (!line.trim()) continue;
 
-    const [char, timeStr] = lines[i].split(/\s+/);
-    const time = parseFloat(timeStr);
+    // Count leading spaces to detect space inputs
+    const leadingSpaces = line.match(/^\s*/)?.[0]?.length ?? 0;
 
-    // Handle backspace
-    if (char === "Backspace") {
-      session_text = session_text.slice(0, -1);
-    }
-    // Handle special characters
-    else if (char === "Space" || char === "") {
+    if (leadingSpaces > 0) {
+      // If there are leading spaces, user typed a space
       session_text += " ";
-    } else if (char === "Enter") {
-      session_text += "\n";
+      const timestamp = parseFloat(line.trim());
+      total_time += timestamp;
+      total_chars += 1;
+      intervals.push(timestamp);
+    } else {
+      // Handle regular characters and special keys
+      const [char, timeStr] = line.split(/\s+/);
+      const time = parseFloat(timeStr);
+      total_time += time;
+      total_chars += 1;
+      intervals.push(time);
+
+      if (char === "Backspace") {
+        session_text = session_text.slice(0, -1);
+      } else if (char === "Space" || char === "") {
+        session_text += " ";
+      } else if (char === "Enter") {
+        session_text += "\n";
+      } else if (char.length === 1) {
+        session_text += char;
+      }
     }
-    // Handle regular characters
-    else if (char.length === 1) {
-      session_text += char;
-    }
-    total_chars += 1;
-    total_time += time;
   }
 
   // Filter out multiple consecutive spaces and trim
@@ -1014,18 +1282,8 @@ export function extractSessionDataFromLongString(
 
   // Assuming average word length of 5 characters plus a space (6 keystrokes per word)
   const average_wpm = Number((keystrokesPerMinute / 6).toFixed(2));
-  // Add 8 seconds (8000ms) as per requirement
-  // Calculate standard deviation of keystroke intervals
-  const intervals = lines
-    .slice(4)
-    .map((line) => {
-      if (!line.trim()) return null;
-      const [, timeStr] = line.split(/\s+/);
-      return parseFloat(timeStr);
-    })
-    .filter((interval): interval is number => interval !== null);
 
-  // Calculate variance
+  // Calculate variance for flow score
   const variance =
     intervals.reduce((acc, interval) => {
       const diff = interval - avgKeystrokeTime;
@@ -1040,9 +1298,7 @@ export function extractSessionDataFromLongString(
   // Convert CV to a 0-100 score
   // Lower CV means more consistent typing (better flow)
   // Using exponential decay function to map CV to score
-  // Score will be close to 100 when CV is close to 0
-  // Score will approach 0 as CV increases
-  const flow_score = Number((100 * Math.exp(-2 * cv)).toFixed(2));
+  const flow_score = Number((100 * Math.exp(-cv)).toFixed(2));
 
   const result = {
     user_id,
