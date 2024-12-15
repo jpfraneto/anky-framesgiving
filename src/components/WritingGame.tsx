@@ -40,7 +40,7 @@ export default function WritingGame() {
   const [sessionLongString, setSessionLongString] = useState("");
   const [sessionIpfsHash, setSessionIpfsHash] = useState("");
   const [text, setText] = useState("");
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState("tell me who you are");
   const [sessionActive, setSessionActive] = useState(false);
   const [timeLeft, setTimeLeft] = useState(8000);
   const [idempotencyKey, setIdempotencyKey] = useState("");
@@ -489,22 +489,22 @@ export default function WritingGame() {
     }
   }, [context]);
 
-  if (!address)
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-white text-2xl p-4">
-        <p>you need to access this frame from inside a farcaster client</p>
-        <div className="flex items-center justify-center p-2 bg-white rounded-lg mt-4">
-          <Link href="https://warpcast.com" className="shadow-lg shadow-white">
-            <Image
-              src="https://warpcast.com/og-logo.png"
-              alt="warpcast logo"
-              width={100}
-              height={100}
-            />
-          </Link>
-        </div>
-      </div>
-    );
+  // if (!address)
+  //   return (
+  //     <div className="flex flex-col items-center justify-center h-full text-white text-2xl p-4">
+  //       <p>you need to access this frame from inside a farcaster client</p>
+  //       <div className="flex items-center justify-center p-2 bg-white rounded-lg mt-4">
+  //         <Link href="https://warpcast.com" className="shadow-lg shadow-white">
+  //           <Image
+  //             src="https://warpcast.com/og-logo.png"
+  //             alt="warpcast logo"
+  //             width={100}
+  //             height={100}
+  //           />
+  //         </Link>
+  //       </div>
+  //     </div>
+  //   );
 
   if (resettingSession) {
     return <div>resetting session...</div>;
@@ -807,34 +807,6 @@ function UserWonTheGame({
             height={300}
             className="animate-scaleIn"
           />
-          <a
-            href={
-              ankyMetadata?.image_cloudinary_url ||
-              "https://github.com/jpfraneto/images/blob/main/anky.png?raw=true"
-            }
-            download
-            className="absolute bottom-2 right-2 bg-white/30 hover:bg-white/50 p-2 rounded-full backdrop-blur-sm transition-all duration-200 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-white"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-          </a>
         </div>
       </div>
       <div className="flex flex-col items-center justify-center mt-6 space-y-4">
