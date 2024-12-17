@@ -10,12 +10,14 @@ import sdk, { type FrameContext } from "@farcaster/frame-sdk";
 import { useAccount } from "wagmi";
 import { Rocket, RefreshCw, Wand2 } from "lucide-react";
 
+import { extractSessionDataFromLongString } from "../lib/writing_game";
+
 import axios from "axios";
 import Image from "next/image";
-import Link from "next/link";
 
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { useAnky } from "~/context/AnkyContext";
 
 const SESSION_TIMEOUT = 8 * 60 * 1000; // 8 minutes
 
@@ -54,6 +56,7 @@ export default function WritingGame() {
   >(null);
   const [ankyMetadata, setAnkyMetadata] = useState<AnkyMetadata | null>(null);
   const [isDeployingAnky, setIsDeployingAnky] = useState(false);
+  console.log(isFarcasterClient);
 
   const { address } = useAccount();
 
@@ -67,10 +70,13 @@ export default function WritingGame() {
   const [isSDKLoaded, setIsSDKLoaded] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [context, setContext] = useState<FrameContext>();
+  const [loading, setLoading] = useState(true);
   const [finalCastText, setFinalCastText] = useState<string | null>(null);
   const [processingCastText, setProcessingCastText] = useState(true);
 
   const [addFrameResult, setAddFrameResult] = useState("");
+
+  const { setIsUserWriting } = useAnky();
 
   const prepareWritingSession = (() => {
     let hasRun = false;
@@ -134,6 +140,7 @@ export default function WritingGame() {
 
   const startSession = async () => {
     setSessionActive(true);
+    setIsUserWriting(true);
     try {
       console.log("IN HERE<<<<< THE SESSION ID IS: ", sessionId);
       console.log("IN HERE<<<<< THE context ID IS: ", context);
@@ -210,6 +217,7 @@ export default function WritingGame() {
 
         await prepareWritingSession(sdkContext, address || "");
         console.log("Prepared writing session");
+        setLoading(false);
 
         sdk.actions.ready({});
         console.log("Called sdk.actions.ready()");
@@ -252,10 +260,9 @@ export default function WritingGame() {
   }, [lastKeystrokeTimestamp, writingSessionEnded]);
 
   const handleTextChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    console.log("Handling text change");
+    console.log("Handling text change", e.target.value);
     const currentTime = Date.now();
     const newValue = e.target.value;
-    const lastChar = newValue.slice(-1);
 
     if (!sessionActive) {
       console.log("Starting new session");
@@ -271,26 +278,37 @@ export default function WritingGame() {
     console.log("Updating timestamps and text");
     setLastKeystrokeTimestamp(currentTime);
     setTimeLeft(8000);
-    setText(newValue);
 
     // Calculate time delta
     const timeDelta =
       currentTime - (lastKeystrokeTimeRef.current ?? currentTime);
+    const timeStr = (timeDelta / 1000).toFixed(3);
 
-    // Add keystroke data to session long string
-    setSessionLongString(
-      (prev) => prev + `\n${lastChar} ${(timeDelta / 1000).toFixed(3)}`
-    );
+    // Detect what changed between previous text and new text
+    if (newValue.length < text.length) {
+      // Backspace was pressed
+      setSessionLongString((prev) => prev + "\nBackspace " + timeStr);
+    } else if (newValue.length > text.length) {
+      // New character(s) added
+      const newChars = newValue.slice(text.length);
+      // Build up all keystroke data before updating state
+      const keystrokes = newChars.split("").map((char) => {
+        if (char === "\n") return "Enter " + timeStr;
+        if (char === " ") return "Space " + timeStr;
+        return char + " " + timeStr;
+      });
+      // Add all keystrokes to session string
+      setSessionLongString((prev) => prev + "\n" + keystrokes.join("\n"));
+    }
 
+    setText(newValue);
     lastKeystrokeTimeRef.current = currentTime;
 
     const timeout = setTimeout(() => {
       console.log("Session timeout reached");
-
       setWritingSessionEnded(true);
       if (address) {
         console.log("Sending session to server");
-
         endWritingSession(sessionLongString, address);
         const sessionData = extractSessionDataFromLongString(sessionLongString);
         if (sessionData.total_time_written > 479999) {
@@ -383,6 +401,12 @@ export default function WritingGame() {
       setSessionIpfsHash(response.data.ipfs_hash);
       setFinalCastText(text);
       setProcessingCastText(false);
+      const elapsedTime = sessionStartTimestamp
+        ? Date.now() - sessionStartTimestamp
+        : 0;
+      if (elapsedTime < 479999) {
+        setIsUserWriting(false);
+      }
       return response.data;
     } catch (error) {
       console.error("Error ending session:", error);
@@ -445,6 +469,7 @@ export default function WritingGame() {
         }
       );
       console.log("the response from the deploy anky is: ", response.data);
+      setIsUserWriting(false);
       return response.data.cast_hash;
     } catch (error) {
       toast.dismiss("deploying");
@@ -514,12 +539,6 @@ export default function WritingGame() {
     const elapsedTime = sessionStartTimestamp
       ? Date.now() - sessionStartTimestamp
       : 0;
-    console.log(
-      "RIGHT BEFORE RENDERING THE END SCREEN, the variables are: ",
-      elapsedTime,
-      sessionStartTimestamp,
-      isFarcasterClient
-    );
     if (elapsedTime >= SESSION_TIMEOUT) {
       return (
         <UserWonTheGame
@@ -561,12 +580,13 @@ export default function WritingGame() {
         pauseOnHover
         theme="dark"
       />
-      <LifeBar timeLeft={timeLeft} />
       <AnkyProgressBar sessionStartTime={sessionStartTimestamp} />
+      <LifeBar timeLeft={timeLeft} />
       <WritingComponent
         text={text}
         prompt={prompt}
         handleTextChange={handleTextChange}
+        loading={loading}
       />
     </div>
   );
@@ -966,10 +986,12 @@ function WritingComponent({
   text,
   prompt,
   handleTextChange,
+  loading,
 }: {
   text: string;
   prompt: string;
   handleTextChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  loading: boolean;
 }) {
   const [streamedPrompt, setStreamedPrompt] = useState("");
   const CHAR_DELAY = 22;
@@ -995,8 +1017,8 @@ function WritingComponent({
 
   return (
     <textarea
-      className="w-full  h-96  md:h-full p-4 text-gray-300 bg-black placeholder:text-gray-400 text-lg sm:text-xl md:text-2xl resize-none"
-      placeholder={streamedPrompt}
+      className="w-full  h-96 sm:h-full p-4 text-gray-300 bg-black placeholder:text-gray-400 text-lg sm:text-xl md:text-2xl resize-none"
+      placeholder={loading ? "..." : streamedPrompt}
       autoCorrect="off"
       autoComplete="off"
       autoCapitalize="off"
@@ -1178,7 +1200,7 @@ function SessionCompleteButtons({
   );
 }
 
-interface SessionData {
+export interface SessionData {
   user_id: string;
   session_id: string;
   prompt: string;
@@ -1188,103 +1210,6 @@ interface SessionData {
   word_count: number;
   average_wpm: number;
   flow_score: number;
-}
-
-export function extractSessionDataFromLongString(
-  session_long_string: string
-): SessionData {
-  const lines = session_long_string.split("\n");
-  const user_id = lines[0];
-  const session_id = lines[1];
-  const prompt = lines[2];
-  const starting_timestamp = parseInt(lines[3]);
-
-  let session_text = "";
-  let total_time = 0;
-  let total_chars = 0;
-  const intervals: number[] = [];
-
-  // Process each line starting from index 4
-  for (let i = 4; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.trim()) continue;
-
-    // Count leading spaces to detect space inputs
-    const leadingSpaces = line.match(/^\s*/)?.[0]?.length ?? 0;
-
-    if (leadingSpaces > 0) {
-      // If there are leading spaces, user typed a space
-      session_text += " ";
-      const timestamp = parseFloat(line.trim());
-      total_time += timestamp;
-      total_chars += 1;
-      intervals.push(timestamp);
-    } else {
-      // Handle regular characters and special keys
-      const [char, timeStr] = line.split(/\s+/);
-      const time = parseFloat(timeStr);
-      total_time += time;
-      total_chars += 1;
-      intervals.push(time);
-
-      if (char === "Backspace") {
-        session_text = session_text.slice(0, -1);
-      } else if (char === "Space" || char === "") {
-        session_text += " ";
-      } else if (char === "Enter") {
-        session_text += "\n";
-      } else if (char.length === 1) {
-        session_text += char;
-      }
-    }
-  }
-
-  // Filter out multiple consecutive spaces and trim
-  session_text = session_text.replace(/\s+/g, " ").trim();
-
-  const word_count = session_text
-    .split(/\s+/)
-    .filter((word) => word.length > 0).length;
-
-  // Calculate average time between keystrokes in milliseconds
-  const avgKeystrokeTime = total_time / total_chars;
-
-  // Calculate how many keystrokes can be made in a minute
-  const keystrokesPerMinute = 60 / avgKeystrokeTime;
-
-  // Assuming average word length of 5 characters plus a space (6 keystrokes per word)
-  const average_wpm = Number((keystrokesPerMinute / 6).toFixed(2));
-
-  // Calculate variance for flow score
-  const variance =
-    intervals.reduce((acc, interval) => {
-      const diff = interval - avgKeystrokeTime;
-      return acc + diff * diff;
-    }, 0) / intervals.length;
-
-  const stdDev = Math.sqrt(variance);
-
-  // Calculate coefficient of variation (CV) = stdDev / mean
-  const cv = stdDev / avgKeystrokeTime;
-
-  // Convert CV to a 0-100 score
-  // Lower CV means more consistent typing (better flow)
-  // Using exponential decay function to map CV to score
-  const flow_score = Number((100 * Math.exp(-cv)).toFixed(2));
-
-  const result = {
-    user_id,
-    session_id,
-    prompt,
-    starting_timestamp,
-    session_text,
-    total_time_written: 1000 * Math.floor(total_time + 8),
-    word_count,
-    average_wpm,
-    flow_score,
-  };
-
-  return result;
 }
 
 function WritingSessionChart({
