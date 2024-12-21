@@ -5,20 +5,14 @@ import Image from "next/image";
 import { Send } from "lucide-react";
 import axios from "axios";
 import { BaseError } from "viem";
-import {
-  useConnect,
-  useSwitchChain,
-  useChainId,
-  useAccount,
-  usePublicClient,
-  useWriteContract,
-} from "wagmi";
+import { degen } from "viem/chains";
+import { useConnect, useSwitchChain, useChainId } from "wagmi";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { toast } from "react-toastify";
 import sdk from "@farcaster/frame-sdk";
 
-// Import your custom Degen chain definition
-// Adjust the path as necessary:
-import { degenChain } from "../../../components/providers/WagmiProvider";
+console.log("degen chain ID = ", degen.id);
+console.log("degen RPC URLs = ", degen.rpcUrls);
 
 import ankySpandasAbi from "../../../lib/ankySpandasAbi.json";
 
@@ -35,16 +29,13 @@ const ANKY_SPANDAS_ADDRESS = "0xC83c51bf18c5E21a8111Bd7C967c1EcDB15b90E8";
 
 export default function AnkyPage() {
   console.log("Rendering AnkyPage component");
-
-  // Wagmi hooks
   const { connectors, connectAsync } = useConnect();
   const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
   const account = useAccount();
-  const publicClient = usePublicClient();
   const { writeContractAsync: writeContract } = useWriteContract();
+  const publicClient = usePublicClient();
 
-  // Local state
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -62,8 +53,10 @@ export default function AnkyPage() {
   console.log("Current wallet address:", account.address);
   console.log("Current spanda balance:", spandaBalance);
   console.log("Selected spanda type:", selectedSpandaType);
-  console.log("Current chain ID:", chainId, "| typeof =", typeof chainId);
-  console.log("Degen Chain ID (from provider) =", degenChain.id);
+  console.log("the current chain id is", chainId);
+
+  console.log("chainId =", chainId, " typeof =", typeof chainId);
+  console.log("degen.id =", degen.id, " typeof =", typeof degen.id);
 
   const spandaTypes = [
     { id: 1, name: "Image", available: true },
@@ -72,15 +65,12 @@ export default function AnkyPage() {
     { id: 4, name: "48s Video (Coming Soon)", available: false },
   ];
 
-  // Load Spanda balance on mount or when account changes
   useEffect(() => {
     console.log("Running loadSpandaBalance effect");
 
     const loadSpandaBalance = async () => {
       if (!account.address || !publicClient) {
-        console.log(
-          "No wallet address or publicClient found, skipping balance load"
-        );
+        console.log("No wallet address found, skipping balance load");
         return;
       }
 
@@ -103,22 +93,20 @@ export default function AnkyPage() {
     };
 
     loadSpandaBalance();
-  }, [account.address, publicClient]);
+  }, [account.address]);
 
-  // Function to purchase a Spanda pack
   const purchaseSpandaPack = useCallback(async () => {
     console.log("🚀 Starting purchaseSpandaPack function");
-
     if (!publicClient || !account.address) {
       console.log("❌ No public client or account address found");
       return;
     }
 
-    // Ensure we're on Degen chain
-    if (chainId !== degenChain.id) {
+    // First ensure we're on Degen chain
+    if (chainId !== degen.id) {
       console.log("Wrong chain, need to switch to DEGEN first");
       try {
-        await switchChainAsync({ chainId: degenChain.id });
+        await switchChainAsync({ chainId: degen.id });
       } catch (e) {
         console.error("Failed to switch to DEGEN chain:", e);
         toast.error("Please switch to DEGEN chain");
@@ -134,32 +122,33 @@ export default function AnkyPage() {
       })) as bigint;
       console.log("💰 DEGEN price:", degenPrice.toString());
 
-      const PACK_COST_USD = 8n * 10n ** 18n; // $8 in 18-decimal
+      const PACK_COST_USD = 8n * 10n ** 18n;
       const degenRequired = (8n * PACK_COST_USD * 10n ** 18n) / degenPrice;
       console.log("💵 DEGEN required for purchase:", degenRequired.toString());
 
-      // Simulate (optional but recommended)
+      // Simulate with explicit chain ID
       await publicClient.simulateContract({
         address: ANKY_SPANDAS_ADDRESS,
         abi: ankySpandasAbi,
         functionName: "purchaseSpandaPack",
         account: account.address,
         value: degenRequired,
-        chain: degenChain, // pass degenChain so viem uses the correct RPC
+        chain: degen,
       });
       console.log("🔄 Simulation successful!");
 
-      // Actually send the transaction
       const txHash = await writeContract({
         address: ANKY_SPANDAS_ADDRESS,
         abi: ankySpandasAbi,
         functionName: "purchaseSpandaPack",
         value: degenRequired,
-        chain: degenChain,
+        chain: degen,
       });
 
       console.log("📨 Transaction hash:", txHash);
-      await publicClient.waitForTransactionReceipt({ hash: txHash });
+      await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+      });
 
       // Update balance after successful purchase
       const newBalance = await publicClient.readContract({
@@ -186,15 +175,14 @@ export default function AnkyPage() {
     }
   }, [publicClient, account.address, writeContract, chainId, switchChainAsync]);
 
-  // Button click handler for purchase
   const handlePurchase = useCallback(async () => {
     console.log("Starting handlePurchase");
     try {
       if (!account.isConnected) {
         console.log("Account not connected, attempting to connect");
-        // Try switching first (may fail if not connected)
+        // First try to switch to Degen chain (this might fail if not connected yet)
         try {
-          await switchChainAsync({ chainId: degenChain.id });
+          await switchChainAsync({ chainId: degen.id });
         } catch (e) {
           console.log("Chain switch failed, will connect first:", e);
         }
@@ -202,7 +190,7 @@ export default function AnkyPage() {
         // Now connect, explicitly specifying Degen chain
         const connectResult = await connectAsync({
           connector: connectors[0]!,
-          chainId: degenChain.id,
+          chainId: degen.id,
         });
         console.log("Connect result:", connectResult);
 
@@ -212,21 +200,22 @@ export default function AnkyPage() {
           return;
         }
 
-        // Double-check we’re on Degen chain
-        if (chainId !== degenChain.id) {
+        // Double check we're on Degen chain after connection
+        if (chainId !== degen.id) {
           console.log("Connected but wrong chain, switching to DEGEN");
-          await switchChainAsync({ chainId: degenChain.id });
+          await switchChainAsync({ chainId: degen.id });
         }
 
         console.log("Successfully connected, proceeding with purchase");
         await purchaseSpandaPack();
       } else {
         console.log("Account already connected");
-        // Ensure we’re on Degen chain
-        if (chainId !== degenChain.id) {
+        // Always ensure we're on Degen chain before proceeding
+        if (chainId !== degen.id) {
           console.log("Wrong chain, switching to DEGEN");
-          await switchChainAsync({ chainId: degenChain.id });
+          await switchChainAsync({ chainId: degen.id });
         }
+
         console.log("Proceeding with purchase");
         await purchaseSpandaPack();
       }
@@ -253,12 +242,12 @@ export default function AnkyPage() {
     switchChainAsync,
   ]);
 
-  // “CLANK” your Anky to Farcaster
   const castNewAnky = async (image_url: string) => {
     try {
       const castIntent = `https://warpcast.com/~/compose?text=${encodeURIComponent(
         `@clanker deploy $change_ticker with name "change name" ${image_url}`
       )}`;
+
       await sdk.actions.openUrl(castIntent);
       toast.success("Successfully clanked your Anky!");
     } catch (err) {
@@ -267,7 +256,6 @@ export default function AnkyPage() {
     }
   };
 
-  // Sending a text prompt to create an Anky Spanda
   const handleSendMessage = async () => {
     console.log("Handling send message");
     if (!inputMessage.trim() || !spandaBalance || spandaBalance < 1) {
@@ -313,7 +301,6 @@ export default function AnkyPage() {
 
       setMessages((prev) => [...prev, ankyMessage]);
 
-      // Refresh Spanda balance
       if (account.address && publicClient) {
         console.log("Refreshing Spanda balance after creation");
         const newBalance = await publicClient.readContract({
@@ -333,7 +320,6 @@ export default function AnkyPage() {
     }
   };
 
-  // If user isn’t connected, show a fallback
   if (!account.address) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white p-4">
@@ -352,7 +338,6 @@ export default function AnkyPage() {
     );
   }
 
-  // Loading state while fetching spanda balance
   if (isLoading) {
     console.log("Rendering loading state");
     return (
@@ -363,7 +348,6 @@ export default function AnkyPage() {
     );
   }
 
-  // Main UI
   console.log("Rendering main UI");
   return (
     <div className="flex flex-col h-full bg-black text-white pb-16 overflow-y-scroll">
@@ -390,7 +374,7 @@ export default function AnkyPage() {
             onClick={handlePurchase}
             className="mt-2 bg-purple-600 text-white px-4 py-1 rounded-full text-sm hover:bg-purple-700 transition-colors"
           >
-            Buy 88 Pack (~1 USD in $DEGEN)
+            Buy Pack (8 usd in $degen)
           </button>
         </div>
       </div>
