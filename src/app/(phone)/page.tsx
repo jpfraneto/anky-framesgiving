@@ -10,7 +10,7 @@ const frame = {
     title: "Anky",
     action: {
       type: "launch_frame",
-      name: '"write"',
+      name: "Anky",
       url: appUrl,
       splashImageUrl: `https://github.com/jpfraneto/images/blob/main/splash222.png?raw=true`,
       splashBackgroundColor: "#000000",

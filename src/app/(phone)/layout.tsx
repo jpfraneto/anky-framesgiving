@@ -61,7 +61,7 @@ export default function PhoneLayout({
         <div className="h-full w-full bg-white">
           {children}
           {isWritingGameVisible && (
-            <div className="fixed inset-0 bg-black bg-opacity-90">
+            <div className="fixed inset-0 bg-black bg-opacity-90 grow">
               <WritingGame />
             </div>
           )}

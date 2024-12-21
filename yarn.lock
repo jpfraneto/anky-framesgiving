@@ -140,6 +140,11 @@
     eventemitter3 "^5.0.1"
     ox "^0.4.0"
 
+"@farcaster/frame-wagmi-connector@^0.0.6":
+  version "0.0.6"
+  resolved "https://registry.yarnpkg.com/@farcaster/frame-wagmi-connector/-/frame-wagmi-connector-0.0.6.tgz#a67cec6cfcbaa8e15de70ce3d0f2a5c01cc07638"
+  integrity sha512-5Ta8vDs6cJygvg9cs20E29bJZcLWPQRSaUyHuLt+biA1YHbRkzRNr/tDmBd1DV/Y59OXIaNdyBxXb6NNX7wung==
+
 "@humanwhocodes/config-array@^0.13.0":
   version "0.13.0"
   resolved "https://registry.yarnpkg.com/@humanwhocodes/config-array/-/config-array-0.13.0.tgz#fb907624df3256d04b9aa2df50d7aa97ec648748"

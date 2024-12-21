@@ -24,7 +24,7 @@ const BottomNav = () => {
             setIsWritingGameVisible(false);
           }}
           style={{
-            opacity: 0.44,
+            opacity: 0.66,
           }}
         >
           👽
@@ -54,7 +54,7 @@ const BottomNav = () => {
 
           <div className="relative -mt-8">
             <button
-              className="bg-purple-500 p-4 w-[55px] h-[55px] rounded-full shadow-lg hover:bg-purple-600 transition-colors text-xl"
+              className="bg-purple-700 p-4 w-[55px] h-[55px] rounded-full shadow-lg hover:bg-purple-600 transition-colors text-xl"
               onClick={() => {
                 if (typeof navigator !== "undefined" && navigator.vibrate) {
                   navigator.vibrate(5);

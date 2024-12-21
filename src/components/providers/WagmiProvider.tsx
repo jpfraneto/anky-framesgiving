@@ -1,14 +1,16 @@
 import { createConfig, http, WagmiProvider } from "wagmi";
-import { base } from "wagmi/chains";
+import { degen } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { frameConnector } from "~/lib/connector";
+import { farcasterFrame } from "@farcaster/frame-wagmi-connector";
 
 export const config = createConfig({
-  chains: [base],
+  chains: [degen],
   transports: {
-    [base.id]: http(),
+    [degen.id]: http(
+      process.env.NEXT_PUBLIC_ALCHEMY_RPC ?? "https://rpc.degen.tips"
+    ),
   },
-  connectors: [frameConnector()],
+  connectors: [farcasterFrame()],
 });
 
 const queryClient = new QueryClient();

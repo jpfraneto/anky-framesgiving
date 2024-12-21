@@ -9,6 +9,7 @@ import {
 import sdk, { type FrameContext } from "@farcaster/frame-sdk";
 import { useAccount } from "wagmi";
 import { Rocket, RefreshCw, Wand2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { extractSessionDataFromLongString } from "../lib/writing_game";
 
@@ -33,7 +34,6 @@ type AnkyMetadata = {
 };
 
 export default function WritingGame() {
-  console.log("INSIDE THE WRITING GAME");
   const [lastKeystrokeTimestamp, setLastKeystrokeTimestamp] = useState<
     number | null
   >(null);
@@ -46,8 +46,8 @@ export default function WritingGame() {
   const [sessionActive, setSessionActive] = useState(false);
   const [timeLeft, setTimeLeft] = useState(8000);
   const [idempotencyKey, setIdempotencyKey] = useState("");
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
 
-  const [isFarcasterClient, setIsFarcasterClient] = useState(false);
   const [ankyMetadataRequestPending, setAnkyMetadataRequestPending] =
     useState(false);
   const [alreadyLoaded, setAlreadyLoaded] = useState(false);
@@ -56,7 +56,6 @@ export default function WritingGame() {
   >(null);
   const [ankyMetadata, setAnkyMetadata] = useState<AnkyMetadata | null>(null);
   const [isDeployingAnky, setIsDeployingAnky] = useState(false);
-  console.log(isFarcasterClient);
 
   const { address } = useAccount();
 
@@ -77,6 +76,8 @@ export default function WritingGame() {
   const [addFrameResult, setAddFrameResult] = useState("");
 
   const { setIsUserWriting } = useAnky();
+  const searchParams = useSearchParams();
+  const urlPrompt = searchParams.get("prompt");
 
   const prepareWritingSession = (() => {
     let hasRun = false;
@@ -87,8 +88,9 @@ export default function WritingGame() {
 
       hasRun = true;
       try {
+        console.log("the url prompt is: ", urlPrompt);
         const response = await axios.get(
-          `https://farcaster.anky.bot/framesgiving/prepare-writing-session?fid=${userContext.user.fid}&userWallet=${userAddress}`
+          `https://farcaster.anky.bot/framesgiving/prepare-writing-session?fid=${userContext.user.fid}&userWallet=${userAddress}&prompt=${urlPrompt}`
         );
 
         const data = response.data;
@@ -121,7 +123,7 @@ export default function WritingGame() {
     setTimeLeft(0);
     setSessionLongString("");
     setWritingSessionEnded(false);
-    setSessionStartTimestamp(new Date().getTime());
+    setSessionStartTimestamp(null);
 
     if (keystrokeTimeoutRef.current) {
       clearTimeout(keystrokeTimeoutRef.current);
@@ -169,6 +171,7 @@ export default function WritingGame() {
         }
       );
       if (response.data.success) {
+        setSessionStartTimestamp(new Date().getTime());
         sixMinTimeoutRef.current = setTimeout(() => {
           toast.info("6 minutes remaining");
         }, 120000);
@@ -196,6 +199,10 @@ export default function WritingGame() {
     const load = async () => {
       console.log("Starting load function");
       console.log("Initial conditions:", { alreadyLoaded, sdk, isSDKLoaded });
+      console.log("HEEEEREEEEEE", urlPrompt);
+      if (urlPrompt) {
+        setPrompt(decodeURIComponent(urlPrompt));
+      }
 
       if (alreadyLoaded || !sdk || isSDKLoaded) {
         console.log("Exiting early due to conditions");
@@ -223,7 +230,6 @@ export default function WritingGame() {
         console.log("Called sdk.actions.ready()");
       } catch (error) {
         console.log("Error in load function:", error);
-        setIsFarcasterClient(false);
         setPrompt("tell us who you are");
         setSessionId(crypto.randomUUID());
         sdk.actions.ready({});
@@ -267,7 +273,6 @@ export default function WritingGame() {
     if (!sessionActive) {
       console.log("Starting new session");
       startSession();
-      setSessionStartTimestamp(currentTime);
     }
 
     if (keystrokeTimeoutRef.current) {
@@ -294,7 +299,7 @@ export default function WritingGame() {
       // Build up all keystroke data before updating state
       const keystrokes = newChars.split("").map((char) => {
         if (char === "\n") return "Enter " + timeStr;
-        if (char === " ") return "Space " + timeStr;
+        if (char === " ") return " " + timeStr;
         return char + " " + timeStr;
       });
       // Add all keystrokes to session string
@@ -480,9 +485,8 @@ export default function WritingGame() {
 
   const addFrame = useCallback(async () => {
     console.log("Adding frame...");
+    setIsSavingNotifications(true);
     try {
-      // setAddFrameResult("");
-
       console.log("Calling sdk.actions.addFrame()...");
       const result = await sdk.actions.addFrame();
       console.log("addFrame result:", result);
@@ -493,17 +497,37 @@ export default function WritingGame() {
           console.log("Got notification details:", result.notificationDetails);
         }
         setAddFrameResult(result.notificationDetails ? `Success` : "Success");
-        console.log("THE USER FID IS: ", context?.user.fid);
-        const response = await axios.post(
-          "https://farcaster.anky.bot/register-user-for-notifications",
-          {
-            fid: context?.user.fid,
-            token: result.notificationDetails?.token,
-            url: result.notificationDetails?.url,
-            targetUrl: window.location.href,
+
+        if (result.notificationDetails && context?.user.fid) {
+          try {
+            const response = await fetch(
+              "https://farcaster.anky.bot/framesgiving/set-notification-details",
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  fid: context.user.fid,
+                  notificationDetails: {
+                    token: result.notificationDetails.token,
+                    url: result.notificationDetails.url,
+                    targetUrl: window.location.href,
+                  },
+                }),
+              }
+            );
+
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            console.log("Notification details saved:", data);
+          } catch (error) {
+            console.error("Error saving notification details:", error);
+            toast.error("Failed to save notification settings");
           }
-        );
-        console.log("the response012992-0a-------- is: ", response);
+        }
       } else {
         console.log("Frame was not added. Reason:", result.reason);
         setAddFrameResult(`Not added: ${result.reason}`);
@@ -511,6 +535,8 @@ export default function WritingGame() {
     } catch (error) {
       console.error("Error adding frame:", error);
       setAddFrameResult(`Error: ${error}`);
+    } finally {
+      setIsSavingNotifications(false);
     }
   }, [context]);
 
@@ -562,6 +588,7 @@ export default function WritingGame() {
           processingCastText={processingCastText}
           addFrame={addFrame}
           addFrameResult={addFrameResult}
+          isSavingNotifications={isSavingNotifications}
         />
       );
     }
@@ -619,11 +646,11 @@ function UserWonTheGame({
   const session_data = extractSessionDataFromLongString(sessionLongString);
 
   useEffect(() => {
-    const startTime = Date.now();
+    const startTime = sessionLongString.split("\n")[3];
     const duration = 88000; // 88 seconds
 
     const progressInterval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
+      const elapsed = Date.now() - Number(startTime);
       const newProgress = Math.min((elapsed / duration) * 100, 100);
       setProgress(newProgress);
 
@@ -952,6 +979,8 @@ function AnkyProgressBar({
   const elapsedTime = sessionStartTime ? Date.now() - sessionStartTime : 0;
   const isComplete = elapsedTime >= 480000;
 
+  console.log("inside the anky progress bar", elapsedTime, sessionStartTime);
+
   return (
     <div
       className={`h-4 transition-all duration-100 relative overflow-hidden ${
@@ -1037,6 +1066,7 @@ function SessionComplete({
   processingCastText,
   addFrame,
   addFrameResult,
+  isSavingNotifications,
 }: {
   sessionLongString: string;
   onReset: (context: FrameContext) => void;
@@ -1045,6 +1075,7 @@ function SessionComplete({
   processingCastText: boolean;
   addFrame: () => void;
   addFrameResult: string;
+  isSavingNotifications: boolean;
 }) {
   const sessionData = extractSessionDataFromLongString(sessionLongString);
   console.log("the session data is: ", sessionData, addFrameResult);
@@ -1052,7 +1083,7 @@ function SessionComplete({
   return (
     <div className="flex flex-col items-center justify-around h-full bg-black px-8 pt-8">
       <WritingSessionChart sessionLongString={sessionLongString} />
-      <div className="w-full items-center mb-16">
+      <div className="w-full items-center mb-8">
         <div className="w-full flex justify-between mt-4 px-8">
           <div className="w-1/3 text-center items-center mb-8">
             <div className="text-4xl font-bold text-white">
@@ -1088,7 +1119,8 @@ function SessionComplete({
       />
       <button
         onClick={addFrame}
-        className="relative w-full py-4 px-6 text-xl font-bold text-white rounded-lg mt-8 overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95"
+        disabled={isSavingNotifications}
+        className="relative w-full py-4 px-6 text-xl font-bold text-white rounded-lg mt-2 overflow-hidden transition-all duration-300 hover:scale-105 active:scale-95"
         style={{
           background: "linear-gradient(45deg, #ff00ff, #00ffff, #ff00ff)",
           backgroundSize: "200% 200%",
@@ -1123,8 +1155,11 @@ function SessionComplete({
           }
         `}</style>
         <div className="relative z-10">
-          {addFrameResult ? (
-            <span className="animate-bounce">{addFrameResult}</span>
+          {isSavingNotifications ? (
+            <span className="flex items-center justify-center gap-2">
+              <RefreshCw className="w-5 h-5 animate-spin" />
+              Saving notifications...
+            </span>
           ) : (
             <span>get anky notifications ✨</span>
           )}
