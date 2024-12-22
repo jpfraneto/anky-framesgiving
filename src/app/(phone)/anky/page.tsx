@@ -17,6 +17,18 @@ import {
 import { toast } from "react-toastify";
 import sdk from "@farcaster/frame-sdk";
 
+const DEGEN_CHAIN_CONFIG = {
+  chainId: "0x27f7b05a", // 666666666 in hex
+  chainName: "Degen",
+  nativeCurrency: {
+    name: "Degen",
+    symbol: "DEGEN",
+    decimals: 18,
+  },
+  rpcUrls: ["https://rpc.degen.tips"],
+  blockExplorerUrls: ["https://explorer.degen.tips"],
+};
+
 // Import your custom Degen chain definition
 // Adjust the path as necessary:
 import ankySpandasAbi from "../../../lib/ankySpandasAbi.json";
@@ -423,6 +435,31 @@ export default function AnkyPage() {
           <p className="text-lg font-bold text-purple-500">
             {spandaBalance ?? 0}
           </p>
+
+          <button
+            onClick={() => {
+              console.log(account, publicClient, chainId);
+            }}
+          >
+            print data
+          </button>
+          <button
+            onClick={async () => {
+              console.log("changing chain");
+              // First ensure the chain is added to the wallet
+              if (window.ethereum) {
+                await window.ethereum.request({
+                  method: "wallet_addEthereumChain",
+                  params: [DEGEN_CHAIN_CONFIG],
+                });
+              }
+              // Then switch to it
+              await switchChain({ chainId: degen.id });
+              console.log("chain changed");
+            }}
+          >
+            change chain
+          </button>
 
           <button
             onClick={handlePurchase}
