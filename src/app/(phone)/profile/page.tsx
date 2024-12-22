@@ -203,7 +203,7 @@ export default function ProfilePage() {
             })
           );
 
-          setUserAnkys(processedAnkys.filter(Boolean));
+          setUserAnkys(processedAnkys.filter(Boolean).reverse());
         }
       } catch (error) {
         console.error("Error fetching user data:", error);

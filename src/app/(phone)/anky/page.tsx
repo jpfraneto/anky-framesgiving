@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Send } from "lucide-react";
 import axios from "axios";
 import { BaseError } from "viem";
+import { degen } from "viem/chains";
 import {
   useConnect,
   useSwitchChain,
@@ -18,8 +19,6 @@ import sdk from "@farcaster/frame-sdk";
 
 // Import your custom Degen chain definition
 // Adjust the path as necessary:
-import { degenChain } from "../../../components/providers/WagmiProvider";
-
 import ankySpandasAbi from "../../../lib/ankySpandasAbi.json";
 
 interface Message {
@@ -29,6 +28,7 @@ interface Message {
   timestamp: Date;
   image_url?: string;
   ipfs_hash?: string;
+  anky_spanda_id?: string;
 }
 
 const ANKY_SPANDAS_ADDRESS = "0xC83c51bf18c5E21a8111Bd7C967c1EcDB15b90E8";
@@ -39,11 +39,13 @@ export default function AnkyPage() {
   // Wagmi hooks
   const { connectors, connectAsync } = useConnect();
   const chainId = useChainId();
-  const { switchChainAsync } = useSwitchChain();
+  const { switchChain } = useSwitchChain();
   const account = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync: writeContract } = useWriteContract();
-
+  console.log("the account is: ", account);
+  console.log("the public client is: ", publicClient);
+  console.log("the write contract is: ", writeContract);
   // Local state
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -58,12 +60,12 @@ export default function AnkyPage() {
   const [spandaBalance, setSpandaBalance] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSpandaType, setSelectedSpandaType] = useState<number>(1);
+  const [lastPrompt, setLastPrompt] = useState<string | null>(null);
 
   console.log("Current wallet address:", account.address);
   console.log("Current spanda balance:", spandaBalance);
   console.log("Selected spanda type:", selectedSpandaType);
   console.log("Current chain ID:", chainId, "| typeof =", typeof chainId);
-  console.log("Degen Chain ID (from provider) =", degenChain.id);
 
   const spandaTypes = [
     { id: 1, name: "Image", available: true },
@@ -77,6 +79,38 @@ export default function AnkyPage() {
     console.log("Running loadSpandaBalance effect");
 
     const loadSpandaBalance = async () => {
+      console.log("INNN HGERE THE CHAIN IS:", publicClient?.chain);
+
+      try {
+        console.log(
+          "the public cleint and account are:",
+          publicClient,
+          account
+        );
+        await window?.ethereum?.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: "0x27f7b05a", // 666666666 (decimal) => 0x27f7b05a (hex)
+              chainName: "Degen",
+              nativeCurrency: {
+                name: "Degen",
+                symbol: "DEGEN",
+                decimals: 18,
+              },
+              rpcUrls: ["https://rpc.degen.tips"],
+              blockExplorerUrls: ["https://explorer.degen.tips"],
+            },
+          ],
+        });
+
+        console.log("THE CHAIN WAS ADDED", degen.id);
+        await switchChain({ chainId: degen.id });
+        console.log("THE CHAIN WAS SWITCHED");
+      } catch (error) {
+        console.log("THERE WAS AN ERRROR CHANGING THE CHAIN", error);
+      }
+
       if (!account.address || !publicClient) {
         console.log(
           "No wallet address or publicClient found, skipping balance load"
@@ -115,10 +149,10 @@ export default function AnkyPage() {
     }
 
     // Ensure we're on Degen chain
-    if (chainId !== degenChain.id) {
+    if (chainId !== degen.id) {
       console.log("Wrong chain, need to switch to DEGEN first");
       try {
-        await switchChainAsync({ chainId: degenChain.id });
+        await switchChain({ chainId: degen.id });
       } catch (e) {
         console.error("Failed to switch to DEGEN chain:", e);
         toast.error("Please switch to DEGEN chain");
@@ -145,9 +179,10 @@ export default function AnkyPage() {
         functionName: "purchaseSpandaPack",
         account: account.address,
         value: degenRequired,
-        chain: degenChain, // pass degenChain so viem uses the correct RPC
+        chain: degen, // pass degen so viem uses the correct RPC
       });
       console.log("🔄 Simulation successful!");
+      console.log("the chain id is:", await publicClient.getChainId());
 
       // Actually send the transaction
       const txHash = await writeContract({
@@ -155,7 +190,7 @@ export default function AnkyPage() {
         abi: ankySpandasAbi,
         functionName: "purchaseSpandaPack",
         value: degenRequired,
-        chain: degenChain,
+        chain: degen,
       });
 
       console.log("📨 Transaction hash:", txHash);
@@ -184,7 +219,7 @@ export default function AnkyPage() {
       }
       toast.error("Failed to purchase Spanda pack");
     }
-  }, [publicClient, account.address, writeContract, chainId, switchChainAsync]);
+  }, [publicClient, account.address, writeContract, chainId, switchChain]);
 
   // Button click handler for purchase
   const handlePurchase = useCallback(async () => {
@@ -194,7 +229,7 @@ export default function AnkyPage() {
         console.log("Account not connected, attempting to connect");
         // Try switching first (may fail if not connected)
         try {
-          await switchChainAsync({ chainId: degenChain.id });
+          await switchChain({ chainId: degen.id });
         } catch (e) {
           console.log("Chain switch failed, will connect first:", e);
         }
@@ -202,7 +237,7 @@ export default function AnkyPage() {
         // Now connect, explicitly specifying Degen chain
         const connectResult = await connectAsync({
           connector: connectors[0]!,
-          chainId: degenChain.id,
+          chainId: degen.id,
         });
         console.log("Connect result:", connectResult);
 
@@ -213,9 +248,9 @@ export default function AnkyPage() {
         }
 
         // Double-check we’re on Degen chain
-        if (chainId !== degenChain.id) {
+        if (chainId !== degen.id) {
           console.log("Connected but wrong chain, switching to DEGEN");
-          await switchChainAsync({ chainId: degenChain.id });
+          await switchChain({ chainId: degen.id });
         }
 
         console.log("Successfully connected, proceeding with purchase");
@@ -223,9 +258,9 @@ export default function AnkyPage() {
       } else {
         console.log("Account already connected");
         // Ensure we’re on Degen chain
-        if (chainId !== degenChain.id) {
+        if (chainId !== degen.id) {
           console.log("Wrong chain, switching to DEGEN");
-          await switchChainAsync({ chainId: degenChain.id });
+          await switchChain({ chainId: degen.id });
         }
         console.log("Proceeding with purchase");
         await purchaseSpandaPack();
@@ -250,15 +285,15 @@ export default function AnkyPage() {
     connectors,
     purchaseSpandaPack,
     chainId,
-    switchChainAsync,
+    switchChain,
   ]);
 
   // “CLANK” your Anky to Farcaster
   const castNewAnky = async (image_url: string) => {
     try {
       const castIntent = `https://warpcast.com/~/compose?text=${encodeURIComponent(
-        `@clanker deploy $change_ticker with name "change name" ${image_url}`
-      )}`;
+        `@clanker deploy $change_ticker with name "change name"\n\n${lastPrompt}`
+      )}&embeds[]=${encodeURIComponent(image_url)}`;
       await sdk.actions.openUrl(castIntent);
       toast.success("Successfully clanked your Anky!");
     } catch (err) {
@@ -289,6 +324,7 @@ export default function AnkyPage() {
 
     try {
       console.log("Sending request to create Anky Spanda");
+      setLastPrompt(inputMessage);
       const response = await axios.post(
         "https://farcaster.anky.bot/framesgiving/create-new-anky-spanda",
         {
@@ -303,11 +339,12 @@ export default function AnkyPage() {
 
       const ankyMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: response.data.message || "Your Anky Spanda is being generated!",
+        text: response.data.message || "Your Anky Spanda was generated!",
         sender: "anky",
         timestamp: new Date(),
         image_url: response.data.image_url,
         ipfs_hash: response.data.ipfsHash,
+        anky_spanda_id: response.data.anky_spanda_id,
       };
       console.log("Created Anky response message:", ankyMessage);
 
@@ -386,6 +423,7 @@ export default function AnkyPage() {
           <p className="text-lg font-bold text-purple-500">
             {spandaBalance ?? 0}
           </p>
+
           <button
             onClick={handlePurchase}
             className="mt-2 bg-purple-600 text-white px-4 py-1 rounded-full text-sm hover:bg-purple-700 transition-colors"
@@ -448,16 +486,20 @@ export default function AnkyPage() {
                   />
                   <div className="flex gap-2 mt-2">
                     <button
-                      onClick={() => sdk.actions.openUrl(message.image_url!)}
+                      onClick={() =>
+                        sdk.actions.openUrl(
+                          `https://www.jeeves.market/degen/asset/0xc83c51bf18c5e21a8111bd7c967c1ecdb15b90e8:${message.anky_spanda_id}`
+                        )
+                      }
                       className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
                     >
-                      SAVE
+                      Marketplace
                     </button>
                     <button
                       onClick={() => castNewAnky(message.image_url!)}
                       className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
                     >
-                      CLANK
+                      Clank it
                     </button>
                   </div>
                 </div>

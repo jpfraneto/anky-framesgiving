@@ -1,33 +1,12 @@
 import { createConfig, http, WagmiProvider } from "wagmi";
-import { Chain } from "viem";
+import { degen } from "viem/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { farcasterFrame } from "@farcaster/frame-wagmi-connector";
-// Define Degen Chain
-export const degenChain = {
-  id: 666666666,
-  name: "Degen Chain",
-  nativeCurrency: {
-    decimals: 18,
-    name: "DEGEN",
-    symbol: "DEGEN",
-  },
-  rpcUrls: {
-    default: {
-      http: ["https://rpc.degen.tips"],
-    },
-    public: {
-      http: ["https://rpc.degen.tips"],
-    },
-  },
-  blockExplorers: {
-    default: { name: "Explorer", url: "https://explorer.degen.tips" },
-  },
-} as const satisfies Chain;
 
 export const config = createConfig({
-  chains: [degenChain],
+  chains: [degen],
   transports: {
-    [degenChain.id]: http(),
+    [degen.id]: http(),
   },
   connectors: [farcasterFrame()],
 });

@@ -1,3 +1,23 @@
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: {
+        method: string;
+        params?: unknown[];
+      }) => Promise<unknown>;
+      on: (event: string, callback: (...args: unknown[]) => void) => void;
+      removeListener: (
+        event: string,
+        callback: (...args: unknown[]) => void
+      ) => void;
+      isMetaMask?: boolean;
+      isConnected?: () => boolean;
+      selectedAddress?: string;
+      chainId?: string;
+    };
+  }
+}
+
 import {
   useEffect,
   useState,
@@ -19,6 +39,7 @@ import Image from "next/image";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useAnky } from "~/context/AnkyContext";
+import { degen } from "viem/chains";
 
 const SESSION_TIMEOUT = 8 * 60 * 1000; // 8 minutes
 
@@ -214,6 +235,27 @@ export default function WritingGame() {
       console.log("Set loaded states to true");
 
       let sdkContext: FrameContext;
+      try {
+        if (typeof window !== "undefined" && window.ethereum) {
+          console.log("ADDING THE CHAIN");
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [degen],
+          });
+          console.log("THE CHAIN WAS ADDED");
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [
+              {
+                chainId: "0x27bc86aa",
+              },
+            ],
+          });
+          console.log("THE CHAIN WAS SWITCHED");
+        }
+      } catch (error) {
+        console.log("THERE WAS AN ERRROR CHANGING THE CHAIN", error);
+      }
       try {
         console.log("Attempting to get SDK context");
         sdkContext = await sdk.context;
@@ -976,10 +1018,25 @@ function AnkyProgressBar({
 }: {
   sessionStartTime: number | null;
 }) {
-  const elapsedTime = sessionStartTime ? Date.now() - sessionStartTime : 0;
-  const isComplete = elapsedTime >= 480000;
+  const [progress, setProgress] = useState(0);
 
-  console.log("inside the anky progress bar", elapsedTime, sessionStartTime);
+  useEffect(() => {
+    if (!sessionStartTime) return;
+
+    // Update progress every 100ms
+    const interval = setInterval(() => {
+      const elapsedTime = Date.now() - sessionStartTime;
+      const progressPercent = Math.min(
+        100,
+        (elapsedTime / (8 * 60 * 1000)) * 100
+      );
+      setProgress(progressPercent);
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [sessionStartTime]);
+
+  const isComplete = progress >= 100;
 
   return (
     <div
@@ -987,14 +1044,7 @@ function AnkyProgressBar({
         isComplete ? "animate-pulse" : ""
       }`}
       style={{
-        width: `${
-          sessionStartTime
-            ? Math.min(
-                100,
-                ((Date.now() - sessionStartTime) / (8 * 60 * 1000)) * 100
-              )
-            : 100
-        }%`,
+        width: `${progress}%`,
       }}
     >
       {isComplete ? (
