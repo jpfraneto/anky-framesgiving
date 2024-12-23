@@ -39,7 +39,6 @@ import Image from "next/image";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useAnky } from "~/context/AnkyContext";
-import { degen } from "viem/chains";
 
 const SESSION_TIMEOUT = 8 * 60 * 1000; // 8 minutes
 
@@ -235,27 +234,50 @@ export default function WritingGame() {
       console.log("Set loaded states to true");
 
       let sdkContext: FrameContext;
+
       try {
-        if (typeof window !== "undefined" && window.ethereum) {
-          console.log("ADDING THE CHAIN");
-          await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [degen],
-          });
-          console.log("THE CHAIN WAS ADDED");
-          await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [
-              {
-                chainId: "0x27bc86aa",
-              },
-            ],
-          });
-          console.log("THE CHAIN WAS SWITCHED");
-        }
+        sdk.wallet.ethProvider.on("accountsChanged", () => {
+          console.log("THE ACCOUNTS CHANGED");
+          console.log("the address is: ", address);
+        });
       } catch (error) {
         console.log("THERE WAS AN ERRROR CHANGING THE CHAIN", error);
       }
+      console.log("going to add the chain");
+      try {
+        await sdk.wallet.ethProvider.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: "0x27bc86aa",
+              chainName: "degen",
+              rpcUrls: [
+                "https://degen-mainnet.g.alchemy.com/v2/ut-dlQGxPiMOVIkGDQKCS6NJlchgvXnL",
+              ],
+              nativeCurrency: {
+                decimals: 18,
+                name: "Degen",
+                symbol: "DEGEN",
+              },
+              blockExplorerUrls: ["https://explorer.degen.tips"],
+            },
+          ],
+        });
+      } catch (error) {
+        console.log("there was an error adding the chain", error);
+      }
+
+      console.log("added the chain, now going to switch to it");
+
+      try {
+        await sdk.wallet.ethProvider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x27bc86aa" }],
+        });
+      } catch (error) {
+        console.log("there was an error switching to the chain", error);
+      }
+      console.log("switched to the chain");
       try {
         console.log("Attempting to get SDK context");
         sdkContext = await sdk.context;
@@ -688,7 +710,7 @@ function UserWonTheGame({
   const session_data = extractSessionDataFromLongString(sessionLongString);
 
   useEffect(() => {
-    const startTime = sessionLongString.split("\n")[3];
+    const startTime = new Date().getTime();
     const duration = 88000; // 88 seconds
 
     const progressInterval = setInterval(() => {
