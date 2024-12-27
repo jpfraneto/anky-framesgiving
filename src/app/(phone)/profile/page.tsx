@@ -14,6 +14,7 @@ interface Anky {
   imageIpfsHash: string;
   writingSessionLongString: string;
   text: string;
+  prompt: string;
 }
 
 interface ApiSession {
@@ -144,12 +145,12 @@ export default function ProfilePage() {
                 const sessionData = extractSessionDataFromLongString(
                   sessionLongStringResponse
                 );
-                console.log("sessionData askjdaklds", sessionData);
 
                 return {
                   id: session.id,
                   fid: session.fid,
                   startTime: session.startTime,
+                  prompt: sessionData.prompt,
                   text: sessionData.session_text,
                   endTime: session.endTime,
                   ipfsHash: session.ipfsHash,
@@ -184,11 +185,9 @@ export default function ProfilePage() {
                     ""
                   )}`
                 );
-                console.log("writingSessionResponse", writingSessionResponse);
                 const sessionData = extractSessionDataFromLongString(
                   writingSessionResponse.data
                 );
-                console.log("the session 998998data is", sessionData);
                 return {
                   description: ankyMetadata.description,
                   name: ankyMetadata.name,
@@ -224,8 +223,8 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-black text-white">
-        <p>Loading...</p>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 text-white p-4 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-400"></div>
       </div>
     );
   }
@@ -418,7 +417,9 @@ export default function ProfilePage() {
                   {selectedAnky.description}
                 </p>
                 <div className="mt-4">
-                  <h4 className="font-medium mb-2">Writing Session</h4>
+                  <h4 className="font-medium mb-2 text-xl text-purple-600">
+                    {selectedAnky.prompt}
+                  </h4>
                   <p className="text-gray-300 whitespace-pre-wrap">
                     {selectedAnky.text}
                   </p>

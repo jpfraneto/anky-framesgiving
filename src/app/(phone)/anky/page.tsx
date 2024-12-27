@@ -17,18 +17,17 @@ import {
 import { toast } from "react-toastify";
 import sdk from "@farcaster/frame-sdk";
 
-const DEGEN_CHAIN_ID = "0x27f7b05a"; // 666666666 in hex
-const DEGEN_CHAIN_CONFIG = {
-  chainId: DEGEN_CHAIN_ID,
-  chainName: "Degen",
-  nativeCurrency: {
-    name: "Degen",
-    symbol: "DEGEN",
-    decimals: 18,
-  },
-  rpcUrls: ["https://rpc.degen.tips"],
-  blockExplorerUrls: ["https://explorer.degen.tips"],
-};
+// const DEGEN_CHAIN_CONFIG = {
+//   chainId: "0x27f7b05a", // 666666666 in hex
+//   chainName: "Degen",
+//   nativeCurrency: {
+//     name: "Degen",
+//     symbol: "DEGEN",
+//     decimals: 18,
+//   },
+//   rpcUrls: ["https://rpc.degen.tips"],
+//   blockExplorerUrls: ["https://explorer.degen.tips"],
+// };
 
 // Import your custom Degen chain definition
 // Adjust the path as necessary:
@@ -89,26 +88,27 @@ export default function AnkyPage() {
 
   // Load Spanda balance on mount or when account changes
   useEffect(() => {
+    console.log("Running loadSpandaBalance effect");
+
     const loadSpandaBalance = async () => {
+      console.log("INNN HGERE THE CHAIN IS:", publicClient?.chain);
+
+      try {
+        await switchChain({ chainId: degen.id });
+        console.log("THE CHAIN WAS SWITCHED");
+      } catch (error) {
+        console.log("THERE WAS AN ERRROR CHANGING THE CHAIN", error);
+      }
+
       if (!account.address || !publicClient) {
-        setIsLoading(false);
+        console.log(
+          "No wallet address or publicClient found, skipping balance load"
+        );
         return;
       }
 
       try {
-        // Ensure we're on Degen chain before proceeding
-        const chainSwitched = await ensureDegenChain(
-          publicClient,
-          switchChain,
-          account
-        );
-
-        if (!chainSwitched) {
-          toast.error("Please switch to Degen chain manually");
-          setIsLoading(false);
-          return;
-        }
-
+        console.log("Fetching spanda balance for address:", account.address);
         const balance = await publicClient.readContract({
           address: ANKY_SPANDAS_ADDRESS,
           abi: ankySpandasAbi,
@@ -116,106 +116,64 @@ export default function AnkyPage() {
           args: [account.address as `0x${string}`],
         });
 
+        console.log("Raw balance from contract:", balance);
         setSpandaBalance(Number(balance));
       } catch (err) {
         console.error("Error loading Spanda balance:", err);
-        toast.error("Error loading Spanda balance");
       } finally {
         setIsLoading(false);
       }
     };
 
     loadSpandaBalance();
-  }, [account.address, publicClient, switchChain]);
-
-  const ensureDegenChain = async (
-    publicClient: any,
-    switchChain: any,
-    account: any
-  ) => {
-    try {
-      // Check if we're already on Degen chain
-      const currentChainId = await publicClient?.getChainId();
-      if (currentChainId === BigInt(666666666)) {
-        return true;
-      }
-
-      // Try to add the chain first
-      if (window?.ethereum) {
-        try {
-          await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: DEGEN_CHAIN_ID }],
-          });
-          return true;
-        } catch (switchError: any) {
-          // This error code indicates that the chain has not been added to MetaMask
-          if (switchError.code === 4902) {
-            try {
-              await window.ethereum.request({
-                method: "wallet_addEthereumChain",
-                params: [DEGEN_CHAIN_CONFIG],
-              });
-              return true;
-            } catch (addError) {
-              console.error("Error adding Degen chain:", addError);
-              return false;
-            }
-          } else {
-            console.error("Error switching to Degen chain:", switchError);
-            return false;
-          }
-        }
-      }
-
-      // Fallback to wagmi's switchChain if window.ethereum is not available
-      await switchChain({ chainId: degen.id });
-      return true;
-    } catch (error) {
-      console.error("Error ensuring Degen chain:", error);
-      return false;
-    }
-  };
+  }, [account.address, publicClient]);
 
   // Function to purchase a Spanda pack
   const purchaseSpandaPack = useCallback(async () => {
+    console.log("🚀 Starting purchaseSpandaPack function");
+
     if (!publicClient || !account.address) {
-      toast.error("Please connect your wallet");
+      console.log("❌ No public client or account address found");
       return;
     }
 
-    try {
-      // Ensure we're on Degen chain
-      const chainSwitched = await ensureDegenChain(
-        publicClient,
-        switchChain,
-        account
-      );
-
-      if (!chainSwitched) {
-        toast.error("Please switch to Degen chain manually");
+    // Ensure we're on Degen chain
+    if (chainId !== degen.id) {
+      console.log("Wrong chain, need to switch to DEGEN first");
+      try {
+        await switchChain({ chainId: degen.id });
+      } catch (e) {
+        console.error("Failed to switch to DEGEN chain:", e);
+        toast.error("Please switch to DEGEN chain");
         return;
       }
+    }
 
+    try {
       const degenPrice = (await publicClient.readContract({
         address: ANKY_SPANDAS_ADDRESS,
         abi: ankySpandasAbi,
         functionName: "degenPriceInUSD",
       })) as bigint;
+      console.log("💰 DEGEN price:", degenPrice.toString());
 
-      const PACK_COST_USD = 8n * 10n ** 18n;
+      const PACK_COST_USD = 8n * 10n ** 18n; // $8 in 18-decimal
       const degenRequired = (PACK_COST_USD * 10n ** 18n) / degenPrice;
+      console.log("💵 DEGEN required for purchase:", degenRequired.toString());
 
-      // Simulate the transaction
+      // Simulate (optional but recommended)
       await publicClient.simulateContract({
         address: ANKY_SPANDAS_ADDRESS,
         abi: ankySpandasAbi,
         functionName: "purchaseSpandaPack",
         account: account.address,
         value: degenRequired,
-        chain: degen,
+        chain: degen, // pass degen so viem uses the correct RPC
       });
+      console.log("🔄 Simulation successful!");
+      console.log("the chain id is:", await publicClient.getChainId());
 
+      // Actually send the transaction
       const txHash = await writeContract({
         address: ANKY_SPANDAS_ADDRESS,
         abi: ankySpandasAbi,
@@ -224,6 +182,7 @@ export default function AnkyPage() {
         chain: degen,
       });
 
+      console.log("📨 Transaction hash:", txHash);
       await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       // Update balance after successful purchase
@@ -237,19 +196,19 @@ export default function AnkyPage() {
       setSpandaBalance(Number(newBalance));
       toast.success("Successfully purchased Spanda pack!");
     } catch (e) {
-      console.error("Error details:", e);
+      console.error("💥 Error details:", e);
       if (e instanceof BaseError) {
         if (
           e.details?.startsWith("User denied") ||
           e.details?.startsWith("User rejected")
         ) {
-          toast.error("Transaction rejected");
+          console.log("🚫 User rejected the transaction");
           return;
         }
       }
       toast.error("Failed to purchase Spanda pack");
     }
-  }, [publicClient, account.address, writeContract, switchChain]);
+  }, [publicClient, account.address, writeContract, chainId, switchChain]);
 
   // Button click handler for purchase
   const handlePurchase = useCallback(async () => {
@@ -454,6 +413,31 @@ export default function AnkyPage() {
             {spandaBalance ?? 0}
           </p>
 
+          {/* <button
+            onClick={() => {
+              console.log(account, publicClient, chainId);
+            }}
+          >
+            print data
+          </button>
+          <button
+            onClick={async () => {
+              console.log("changing chain");
+              // First ensure the chain is added to the wallet
+              if (window.ethereum) {
+                await window.ethereum.request({
+                  method: "wallet_addEthereumChain",
+                  params: [DEGEN_CHAIN_CONFIG],
+                });
+              }
+              // Then switch to it
+              await switchChain({ chainId: degen.id });
+              console.log("chain changed");
+            }}
+          >
+            change chain
+          </button> */}
+
           <button
             onClick={handlePurchase}
             className="mt-2 bg-purple-600 text-white px-4 py-1 rounded-full text-sm hover:bg-purple-700 transition-colors"
@@ -517,13 +501,11 @@ export default function AnkyPage() {
                   <div className="flex gap-2 mt-2">
                     <button
                       onClick={() =>
-                        sdk.actions.openUrl(
-                          `https://www.jeeves.market/degen/asset/0xc83c51bf18c5e21a8111bd7c967c1ecdb15b90e8:${message.anky_spanda_id}`
-                        )
+                        sdk.actions.openUrl(message.image_url || "")
                       }
                       className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
                     >
-                      Marketplace
+                      Image
                     </button>
                     <button
                       onClick={() => castNewAnky(message.image_url!)}

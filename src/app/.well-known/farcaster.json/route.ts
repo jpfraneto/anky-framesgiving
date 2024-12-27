@@ -11,12 +11,14 @@ export async function GET() {
     },
     frame: {
       name: "Anky",
-      version: "0.0.1",
+      version: "next",
       iconUrl:
-        "https://raw.githubusercontent.com/jpfraneto/images/refs/heads/main/splash222.png",
+        "https://github.com/jpfraneto/images/blob/main/anky_v0.png?raw=true",
+      imageUrl:
+        "https://github.com/jpfraneto/images/blob/main/banner-2-anky.png?raw=true",
       homeUrl: "https://framesgiving.anky.bot",
       splashImageUrl:
-        "https://raw.githubusercontent.com/jpfraneto/images/refs/heads/main/splash222.png",
+        "https://github.com/jpfraneto/images/blob/main/anky_v0.png?raw=true",
       splashBackgroundColor: "#9D00FF",
       webhookUrl: "https://farcaster.anky.bot/farcaster-webhook",
     },

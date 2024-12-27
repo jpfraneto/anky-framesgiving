@@ -1,4 +1,4 @@
-import { SessionData } from "../components/WritingGame";
+import { SessionData } from "~/components/WritingGame";
 
 export function extractSessionDataFromLongString(
   session_long_string: string

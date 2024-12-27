@@ -12,7 +12,7 @@ const frame = {
       type: "launch_frame",
       name: "Anky",
       url: appUrl,
-      splashImageUrl: `https://github.com/jpfraneto/images/blob/main/splash222.png?raw=true`,
+      splashImageUrl: `https://github.com/jpfraneto/images/blob/main/anky_v0.png?raw=true`,
       splashBackgroundColor: "#000000",
     },
   },
