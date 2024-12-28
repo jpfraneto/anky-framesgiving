@@ -1,13 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
 export default function HomePage() {
   const router = useRouter();
+  const params = useSearchParams();
+  const prompt = params.get("prompt");
 
   useEffect(() => {
-    router.push("/profile");
+    router.push(`/profile?prompt=${prompt}`);
   }, [router]);
 
   // Keep a minimal return while redirecting

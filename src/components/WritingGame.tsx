@@ -55,7 +55,7 @@ export default function WritingGame() {
   const [sessionLongString, setSessionLongString] = useState("");
   const [sessionIpfsHash, setSessionIpfsHash] = useState("");
   const [text, setText] = useState("");
-  const [prompt, setPrompt] = useState("tell me who you are");
+  const [prompt, setPrompt] = useState("");
   const [sessionActive, setSessionActive] = useState(false);
   const [timeLeft, setTimeLeft] = useState(8000);
   const [idempotencyKey, setIdempotencyKey] = useState("");
@@ -90,20 +90,27 @@ export default function WritingGame() {
 
   const { setIsUserWriting, setUserWritingContext } = useAnky();
   const searchParams = useSearchParams();
+  console.log("THE SEARCH PARAMS ARE: ", searchParams);
   const urlPrompt = searchParams.get("prompt");
+  console.log("THE URL PROMPT IS: ", urlPrompt);
 
   const prepareWritingSession = (() => {
     let hasRun = false;
 
-    return async (userContext: FrameContext, userAddress: string) => {
+    return async (
+      userContext: FrameContext,
+      userAddress: string,
+      finalPrompt: string
+    ) => {
+      if (!finalPrompt) setPrompt("tell me who you are");
       if (!userContext?.user || !userAddress) return;
       if (hasRun) return;
 
       hasRun = true;
       try {
-        console.log("the url prompt is: ", urlPrompt);
+        console.log("the url prompt is: ", finalPrompt);
         const response = await axios.get(
-          `https://farcaster.anky.bot/framesgiving/prepare-writing-session?fid=${userContext.user.fid}&userWallet=${userAddress}&prompt=${urlPrompt}`
+          `https://farcaster.anky.bot/framesgiving/prepare-writing-session?fid=${userContext.user.fid}&userWallet=${userAddress}&prompt=${finalPrompt}`
         );
 
         const data = response.data;
@@ -120,7 +127,14 @@ export default function WritingGame() {
         const sessionId = parsedLongString[1];
         console.log("IN HERE<<<<< THE SESSION ID IS: ", sessionId);
         const thisSessionPrompt = parsedLongString[2];
-        setPrompt(thisSessionPrompt);
+        // Handle urlPrompt if present
+        if (!urlPrompt) {
+          console.log("the url prompt is: ", urlPrompt);
+          setPrompt(thisSessionPrompt);
+        } else {
+          setPrompt(urlPrompt);
+        }
+
         console.log("setting the session id", sessionId);
         setSessionId(sessionId);
       } catch (error) {
@@ -145,7 +159,7 @@ export default function WritingGame() {
     lastKeystrokeTimeRef.current = null;
 
     try {
-      await prepareWritingSession(context!, address!);
+      await prepareWritingSession(context!, address!, "");
       setResettingSession(false);
     } catch (error) {
       console.error("Error preparing session:", error);
@@ -211,31 +225,80 @@ export default function WritingGame() {
 
   useEffect(() => {
     const load = async () => {
-      // Early return if conditions aren't met
       if (alreadyLoaded || !sdk || isSDKLoaded) {
+        console.log("Early return conditions:", {
+          alreadyLoaded,
+          sdkExists: !!sdk,
+          isSDKLoaded,
+        });
         return;
       }
 
       try {
+        console.log("=== Starting Frame Initialization ===");
         setAlreadyLoaded(true);
         setIsSDKLoaded(true);
 
-        // Handle urlPrompt if present
-        if (urlPrompt) {
-          setPrompt(decodeURIComponent(urlPrompt));
+        // Get Frame context
+        const frameContext = await sdk.context;
+        console.log("1. Frame Context received:", frameContext);
+        console.log("   Location data:", frameContext?.location);
+
+        let finalPrompt = "tell me who you are"; // default prompt
+
+        if (frameContext?.location?.type === "cast_embed") {
+          console.log("2. Found embed URL:", frameContext.location.embed);
+
+          try {
+            const embedUrl = frameContext.location.embed;
+            const url = new URL(embedUrl);
+            console.log("3. Parsed URL:", {
+              fullUrl: url.toString(),
+              searchParams: Object.fromEntries(url.searchParams.entries()),
+            });
+
+            const promptParam = url.searchParams.get("prompt");
+            console.log("4. Raw prompt parameter:", promptParam);
+
+            if (promptParam) {
+              // First, split by %20 and then decode each part
+              finalPrompt = promptParam
+                .split("%20")
+                .map((part) => decodeURIComponent(part))
+                .join(" ");
+
+              console.log("Parsed URL:", url.toString());
+              console.log("Raw prompt parameter:", promptParam);
+              console.log("Decoded final prompt:", finalPrompt);
+            }
+          } catch (error) {
+            console.error("⚠️ Error parsing embed URL:", error);
+            console.log(
+              "Raw embed URL for debugging:",
+              frameContext.location.embed
+            );
+          }
+        } else {
+          console.log("2. No embed URL found in context");
         }
 
+        console.log("6. Setting final prompt:", finalPrompt);
+        setPrompt(finalPrompt);
+
         const sdkContext = await sdk.context;
+        console.log("7. SDK Context set");
         setContext(sdkContext);
 
-        if (sdkContext && address) {
-          await prepareWritingSession(sdkContext, address);
+        if (!finalPrompt && sdkContext && address) {
+          console.log("8. Preparing writing session");
+          await prepareWritingSession(sdkContext, address, "");
         }
 
         setLoading(false);
         sdk.actions.ready({});
-      } catch (error) {
-        console.error("Error in load function:", error);
+        console.log("=== Frame Initialization Complete ===");
+      } catch (error: unknown) {
+        console.error("⚠️ Error in frame initialization:", error);
         setPrompt("tell us who you are");
         setSessionId(crypto.randomUUID());
         sdk.actions.ready({});
@@ -243,7 +306,7 @@ export default function WritingGame() {
     };
 
     load();
-  }, [sdk, address, urlPrompt]); // Added urlPrompt
+  }, [sdk, address, urlPrompt]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -577,6 +640,7 @@ export default function WritingGame() {
         handleTextChange={handleTextChange}
         loading={loading}
         createPrompt={createPrompt}
+        context={context!}
       />
     </div>
   );
@@ -588,12 +652,14 @@ function WritingComponent({
   handleTextChange,
   loading,
   createPrompt,
+  context,
 }: {
   text: string;
   prompt: string;
   handleTextChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   loading: boolean;
   createPrompt: boolean;
+  context: FrameContext;
 }) {
   const [streamedPrompt, setStreamedPrompt] = useState("");
   const [createPromptText, setCreatePromptText] = useState("");
@@ -621,8 +687,52 @@ function WritingComponent({
   async function handleCreatePromptTextChange(
     e: React.ChangeEvent<HTMLTextAreaElement>
   ) {
+    console.log("the create prompt text is: ", e.target.value);
     setCreatePromptText(e.target.value);
   }
+
+  const handleCreateFrame = () => {
+    // Let's log each step to understand the transformation
+    console.log("Starting prompt:", createPromptText);
+
+    // Step 1: First encode for the frame's prompt parameter
+    const encodedFramePrompt = createPromptText
+      .split(" ")
+      .map((word) => encodeURIComponent(word))
+      .join("%20");
+    console.log("Encoded frame prompt:", encodedFramePrompt);
+
+    // Step 2: Create the complete frame URL
+    const frameUrl = `https://framesgiving.anky.bot?prompt=${encodedFramePrompt}&fid=${
+      context?.user?.fid || 18350
+    }`;
+    console.log("Frame URL:", frameUrl);
+
+    // Step 3: Encode the entire frameUrl for use in the embeds parameter
+    const encodedFrameUrl = encodeURIComponent(frameUrl);
+    console.log("Encoded frame URL:", encodedFrameUrl);
+
+    // Step 4: Create the composer URL with the encoded text and frame URL
+    const composerUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(
+      createPromptText
+    )}&embeds[]=${encodedFrameUrl}`;
+    console.log("Final composer URL:", composerUrl);
+
+    // For debugging: Try to decode the URL to verify it's correct
+    try {
+      const testUrl = new URL(decodeURIComponent(encodedFrameUrl));
+      const testPrompt = testUrl.searchParams.get("prompt");
+      console.log(
+        "Test decode of prompt:",
+        decodeURIComponent(testPrompt || "")
+      );
+    } catch (err) {
+      console.error("Decode test failed:", err);
+    }
+
+    navigator.clipboard.writeText(composerUrl);
+    sdk.actions.openUrl(composerUrl);
+  };
 
   if (createPrompt) {
     return (
@@ -640,14 +750,9 @@ function WritingComponent({
           onChange={handleCreatePromptTextChange}
         />
         <button
-          onClick={() => {
-            let newPromptUrl = `https://framesgiving.anky.bot?prompt=${encodeURIComponent(
-              createPromptText
-            )}`;
-            sdk.actions.openUrl(newPromptUrl);
-          }}
+          onClick={handleCreateFrame}
           className="absolute left-1/2 -translate-x-1/2 -bottom-16 w-64 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg
-            transition-colors font-medium text-lg"
+    transition-colors font-medium text-lg"
         >
           ask through anky
         </button>
