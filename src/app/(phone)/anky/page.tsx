@@ -5,7 +5,6 @@ import Image from "next/image";
 import { Send } from "lucide-react";
 import axios from "axios";
 import { BaseError } from "viem";
-import { degen } from "viem/chains";
 import {
   useConnect,
   useSwitchChain,
@@ -16,19 +15,31 @@ import {
 } from "wagmi";
 import { toast } from "react-toastify";
 import sdk from "@farcaster/frame-sdk";
+import { defineChain } from "viem";
 
-// const DEGEN_CHAIN_CONFIG = {
-//   chainId: "0x27f7b05a", // 666666666 in hex
-//   chainName: "Degen",
-//   nativeCurrency: {
-//     name: "Degen",
-//     symbol: "DEGEN",
-//     decimals: 18,
-//   },
-//   rpcUrls: ["https://rpc.degen.tips"],
-//   blockExplorerUrls: ["https://explorer.degen.tips"],
-// };
+const DEGEN_ALCHEMY_RPC =
+  process.env.DEGEN_ALCHEMY_RPC ||
+  process.env.NEXT_PUBLIC_DEGEN_ALCHEMY_RPC ||
+  "";
 
+const degenChain = defineChain({
+  id: 666666666,
+  name: "Degen",
+  nativeCurrency: {
+    decimals: 18,
+    name: "Ether",
+    symbol: "ETH",
+  },
+  rpcUrls: {
+    default: {
+      http: [DEGEN_ALCHEMY_RPC],
+      //webSocket: ['wss://rpc.degen.tips'],
+    },
+  },
+  blockExplorers: {
+    default: { name: "Explorer", url: "explorer.degen.tips" },
+  },
+});
 // Import your custom Degen chain definition
 // Adjust the path as necessary:
 import ankySpandasAbi from "../../../lib/ankySpandasAbi.json";
@@ -94,7 +105,7 @@ export default function AnkyPage() {
       console.log("INNN HGERE THE CHAIN IS:", publicClient?.chain);
 
       try {
-        await switchChain({ chainId: degen.id });
+        await switchChain({ chainId: degenChain.id });
         console.log("THE CHAIN WAS SWITCHED");
       } catch (error) {
         console.log("THERE WAS AN ERRROR CHANGING THE CHAIN", error);
@@ -138,10 +149,10 @@ export default function AnkyPage() {
     }
 
     // Ensure we're on Degen chain
-    if (chainId !== degen.id) {
+    if (chainId !== degenChain.id) {
       console.log("Wrong chain, need to switch to DEGEN first");
       try {
-        await switchChain({ chainId: degen.id });
+        await switchChain({ chainId: degenChain.id });
       } catch (e) {
         console.error("Failed to switch to DEGEN chain:", e);
         toast.error("Please switch to DEGEN chain");
@@ -168,7 +179,7 @@ export default function AnkyPage() {
         functionName: "purchaseSpandaPack",
         account: account.address,
         value: degenRequired,
-        chain: degen, // pass degen so viem uses the correct RPC
+        chain: degenChain, // pass degen so viem uses the correct RPC
       });
       console.log("🔄 Simulation successful!");
       console.log("the chain id is:", await publicClient.getChainId());
@@ -179,7 +190,7 @@ export default function AnkyPage() {
         abi: ankySpandasAbi,
         functionName: "purchaseSpandaPack",
         value: degenRequired,
-        chain: degen,
+        chain: degenChain,
       });
 
       console.log("📨 Transaction hash:", txHash);
@@ -218,7 +229,7 @@ export default function AnkyPage() {
         console.log("Account not connected, attempting to connect");
         // Try switching first (may fail if not connected)
         try {
-          await switchChain({ chainId: degen.id });
+          await switchChain({ chainId: degenChain.id });
         } catch (e) {
           console.log("Chain switch failed, will connect first:", e);
         }
@@ -226,7 +237,7 @@ export default function AnkyPage() {
         // Now connect, explicitly specifying Degen chain
         const connectResult = await connectAsync({
           connector: connectors[0]!,
-          chainId: degen.id,
+          chainId: degenChain.id,
         });
         console.log("Connect result:", connectResult);
 
@@ -237,9 +248,9 @@ export default function AnkyPage() {
         }
 
         // Double-check we’re on Degen chain
-        if (chainId !== degen.id) {
+        if (chainId !== degenChain.id) {
           console.log("Connected but wrong chain, switching to DEGEN");
-          await switchChain({ chainId: degen.id });
+          await switchChain({ chainId: degenChain.id });
         }
 
         console.log("Successfully connected, proceeding with purchase");
@@ -247,9 +258,9 @@ export default function AnkyPage() {
       } else {
         console.log("Account already connected");
         // Ensure we’re on Degen chain
-        if (chainId !== degen.id) {
+        if (chainId !== degenChain.id) {
           console.log("Wrong chain, switching to DEGEN");
-          await switchChain({ chainId: degen.id });
+          await switchChain({ chainId: degenChain.id });
         }
         console.log("Proceeding with purchase");
         await purchaseSpandaPack();

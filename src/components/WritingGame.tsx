@@ -94,54 +94,35 @@ export default function WritingGame() {
   const urlPrompt = searchParams.get("prompt");
   console.log("THE URL PROMPT IS: ", urlPrompt);
 
-  const prepareWritingSession = (() => {
-    let hasRun = false;
-
-    return async (
+  const prepareWritingSession = useCallback(
+    async (
       userContext: FrameContext,
       userAddress: string,
       finalPrompt: string
     ) => {
-      if (!finalPrompt) setPrompt("tell me who you are");
       if (!userContext?.user || !userAddress) return;
-      if (hasRun) return;
 
-      hasRun = true;
       try {
-        console.log("the url prompt is: ", finalPrompt);
         const response = await axios.get(
           `https://farcaster.anky.bot/framesgiving/prepare-writing-session?fid=${userContext.user.fid}&userWallet=${userAddress}&prompt=${finalPrompt}`
         );
 
         const data = response.data;
-
         setUserWritingContext(data.userWritingStats);
-
-        toast.info(
-          `Your anky streak is ${data.userWritingStats.currentStreak}`
-        );
         setSessionLongString(data.session_long_string);
 
         const parsedLongString = data.session_long_string.split("\n");
-        // const fid = parsedLongString[0];
         const sessionId = parsedLongString[1];
-        console.log("IN HERE<<<<< THE SESSION ID IS: ", sessionId);
         const thisSessionPrompt = parsedLongString[2];
-        // Handle urlPrompt if present
-        if (!urlPrompt) {
-          console.log("the url prompt is: ", urlPrompt);
-          setPrompt(thisSessionPrompt);
-        } else {
-          setPrompt(urlPrompt);
-        }
 
-        console.log("setting the session id", sessionId);
+        setPrompt(thisSessionPrompt);
         setSessionId(sessionId);
       } catch (error) {
         console.error("Error preparing writing session:", error);
       }
-    };
-  })();
+    },
+    [] // Empty dependency array since it doesn't use any external values
+  );
 
   const resetSession = useCallback(async () => {
     setResettingSession(true);
@@ -225,80 +206,41 @@ export default function WritingGame() {
 
   useEffect(() => {
     const load = async () => {
-      if (alreadyLoaded || !sdk || isSDKLoaded) {
-        console.log("Early return conditions:", {
-          alreadyLoaded,
-          sdkExists: !!sdk,
-          isSDKLoaded,
-        });
-        return;
-      }
+      // Early return if already loaded or missing dependencies
+      if (!sdk || alreadyLoaded || isSDKLoaded || !address) return;
 
       try {
-        console.log("=== Starting Frame Initialization ===");
         setAlreadyLoaded(true);
         setIsSDKLoaded(true);
 
-        // Get Frame context
         const frameContext = await sdk.context;
-        console.log("1. Frame Context received:", frameContext);
-        console.log("   Location data:", frameContext?.location);
+        setContext(frameContext);
 
-        let finalPrompt = "tell me who you are"; // default prompt
-
+        let finalPrompt = "";
         if (frameContext?.location?.type === "cast_embed") {
-          console.log("2. Found embed URL:", frameContext.location.embed);
-
           try {
             const embedUrl = frameContext.location.embed;
             const url = new URL(embedUrl);
-            console.log("3. Parsed URL:", {
-              fullUrl: url.toString(),
-              searchParams: Object.fromEntries(url.searchParams.entries()),
-            });
-
             const promptParam = url.searchParams.get("prompt");
-            console.log("4. Raw prompt parameter:", promptParam);
-
             if (promptParam) {
-              // First, split by %20 and then decode each part
               finalPrompt = promptParam
-                .split("%20")
+                .split("+")
                 .map((part) => decodeURIComponent(part))
                 .join(" ");
-
-              console.log("Parsed URL:", url.toString());
-              console.log("Raw prompt parameter:", promptParam);
-              console.log("Decoded final prompt:", finalPrompt);
             }
           } catch (error) {
-            console.error("⚠️ Error parsing embed URL:", error);
-            console.log(
-              "Raw embed URL for debugging:",
-              frameContext.location.embed
-            );
+            console.error("Error parsing embed URL:", error);
           }
-        } else {
-          console.log("2. No embed URL found in context");
         }
 
-        console.log("6. Setting final prompt:", finalPrompt);
-        setPrompt(finalPrompt);
-
-        const sdkContext = await sdk.context;
-        console.log("7. SDK Context set");
-        setContext(sdkContext);
-
-        if (!finalPrompt && sdkContext && address) {
-          console.log("8. Preparing writing session");
-          await prepareWritingSession(sdkContext, address, "");
+        if (frameContext && address) {
+          await prepareWritingSession(frameContext, address, finalPrompt);
         }
 
         setLoading(false);
         sdk.actions.ready({});
-        console.log("=== Frame Initialization Complete ===");
-      } catch (error: unknown) {
-        console.error("⚠️ Error in frame initialization:", error);
+      } catch (error) {
+        console.error("Error in frame initialization:", error);
         setPrompt("tell us who you are");
         setSessionId(crypto.randomUUID());
         sdk.actions.ready({});
@@ -306,7 +248,7 @@ export default function WritingGame() {
     };
 
     load();
-  }, [sdk, address, urlPrompt]);
+  }, [sdk, address, alreadyLoaded, isSDKLoaded]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -326,73 +268,48 @@ export default function WritingGame() {
     };
   }, [lastKeystrokeTimestamp, writingSessionEnded]);
 
-  const handleTextChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    console.log("Handling text change", e.target.value);
-    const currentTime = Date.now();
-    const newValue = e.target.value;
-
-    if (!sessionActive) {
-      console.log("Starting new session");
-      startSession();
-    }
-
-    if (keystrokeTimeoutRef.current) {
-      console.log("Clearing existing keystroke timeout");
-      clearTimeout(keystrokeTimeoutRef.current);
-    }
-
-    console.log("Updating timestamps and text");
-    setLastKeystrokeTimestamp(currentTime);
-    setTimeLeft(8000);
-
-    // Calculate time delta
-    const timeDelta =
-      currentTime - (lastKeystrokeTimeRef.current ?? currentTime);
-    const timeStr = (timeDelta / 1000).toFixed(3);
-
-    // Detect what changed between previous text and new text
-    if (newValue.length < text.length) {
-      // Backspace was pressed
-      setSessionLongString((prev) => prev + "\nBackspace " + timeStr);
-    } else if (newValue.length > text.length) {
-      // New character(s) added
-      const newChars = newValue.slice(text.length);
-      // Build up all keystroke data before updating state
-      const keystrokes = newChars.split("").map((char) => {
-        if (char === "\n") return "Enter " + timeStr;
-        if (char === " ") return " " + timeStr;
-        return char + " " + timeStr;
-      });
-      // Add all keystrokes to session string
-      setSessionLongString((prev) => prev + "\n" + keystrokes.join("\n"));
-    }
-
-    setText(newValue);
-    lastKeystrokeTimeRef.current = currentTime;
-
-    const timeout = setTimeout(() => {
-      console.log("Session timeout reached");
-      setWritingSessionEnded(true);
+  const endWritingSession = async (
+    sessionLongString: string,
+    address: string
+  ) => {
+    try {
+      clearTimeoutRefs();
+      console.log("ENDING THE WRITING SESSIon");
+      console.log("the session long string is: ", sessionLongString);
+      console.log("the address is: ", address);
+      console.log("the fid is: ", context?.user.fid);
+      const response = await axios.post(
+        "https://farcaster.anky.bot/framesgiving/end-writing-session",
+        {
+          session_long_string: sessionLongString,
+          userWallet: address,
+          fid: context?.user.fid,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log(
+        "the response from ending the writing session is: ",
+        response
+      );
+      setSessionIpfsHash(response.data.ipfs_hash);
+      setFinalCastText(text);
+      setProcessingCastText(false);
       const elapsedTime = sessionStartTimestamp
         ? Date.now() - sessionStartTimestamp
         : 0;
-      if (elapsedTime >= 8 * 60 * 1000) {
-        setIsAnkySession(true);
-      }
-      if (address) {
-        console.log("Sending session to server");
-        endWritingSession(sessionLongString, address);
-        const sessionData = extractSessionDataFromLongString(sessionLongString);
-        if (
-          new Date().getTime() - sessionStartTimestamp! > 479999 ||
-          sessionData.total_time_written > 479999
-        ) {
-          sendAnkyImageRequest();
-        }
-      }
-    }, 8000);
 
-    keystrokeTimeoutRef.current = timeout;
+      if (elapsedTime < 479999) {
+        setIsUserWriting(false);
+      }
+
+      return response.data;
+    } catch (error) {
+      console.error("Error ending session:", error);
+    }
   };
 
   const sendAnkyImageRequest = async () => {
@@ -440,54 +357,83 @@ export default function WritingGame() {
     }
   };
 
+  const handleTextChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
+      const currentTime = Date.now();
+      const newValue = e.target.value;
+
+      if (!sessionActive) {
+        startSession();
+      }
+
+      if (keystrokeTimeoutRef.current) {
+        clearTimeout(keystrokeTimeoutRef.current);
+      }
+
+      setLastKeystrokeTimestamp(currentTime);
+      setTimeLeft(8000);
+
+      const timeDelta =
+        currentTime - (lastKeystrokeTimeRef.current ?? currentTime);
+      const timeStr = (timeDelta / 1000).toFixed(3);
+
+      if (newValue.length < text.length) {
+        setSessionLongString((prev) => prev + "\nBackspace " + timeStr);
+      } else if (newValue.length > text.length) {
+        const newChars = newValue.slice(text.length);
+        const keystrokes = newChars
+          .split("")
+          .map((char) => {
+            if (char === "\n") return "Enter " + timeStr;
+            if (char === " ") return " " + timeStr;
+            return char + " " + timeStr;
+          })
+          .join("\n");
+        setSessionLongString((prev) => prev + "\n" + keystrokes);
+      }
+
+      setText(newValue);
+      lastKeystrokeTimeRef.current = currentTime;
+
+      const timeout = setTimeout(() => {
+        setWritingSessionEnded(true);
+        const elapsedTime = sessionStartTimestamp
+          ? Date.now() - sessionStartTimestamp
+          : 0;
+        if (elapsedTime >= 8 * 60 * 1000) {
+          setIsAnkySession(true);
+        }
+        if (address) {
+          endWritingSession(sessionLongString, address);
+          const sessionData =
+            extractSessionDataFromLongString(sessionLongString);
+          if (
+            new Date().getTime() - sessionStartTimestamp! > 479999 ||
+            sessionData.total_time_written > 479999
+          ) {
+            sendAnkyImageRequest();
+          }
+        }
+      }, 8000);
+
+      keystrokeTimeoutRef.current = timeout;
+    },
+    [
+      sessionActive,
+      text,
+      address,
+      sessionLongString,
+      sessionStartTimestamp,
+      startSession,
+      endWritingSession,
+      sendAnkyImageRequest,
+    ]
+  );
+
   const clearTimeoutRefs = () => {
     if (sixMinTimeoutRef.current) clearTimeout(sixMinTimeoutRef.current);
     if (fourMinTimeoutRef.current) clearTimeout(fourMinTimeoutRef.current);
     if (twoMinTimeoutRef.current) clearTimeout(twoMinTimeoutRef.current);
-  };
-
-  const endWritingSession = async (
-    sessionLongString: string,
-    address: string
-  ) => {
-    try {
-      clearTimeoutRefs();
-      console.log("ENDING THE WRITING SESSIon");
-      console.log("the session long string is: ", sessionLongString);
-      console.log("the address is: ", address);
-      console.log("the fid is: ", context?.user.fid);
-      const response = await axios.post(
-        "https://farcaster.anky.bot/framesgiving/end-writing-session",
-        {
-          session_long_string: sessionLongString,
-          userWallet: address,
-          fid: context?.user.fid,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      console.log(
-        "the response from ending the writing session is: ",
-        response
-      );
-      setSessionIpfsHash(response.data.ipfs_hash);
-      setFinalCastText(text);
-      setProcessingCastText(false);
-      const elapsedTime = sessionStartTimestamp
-        ? Date.now() - sessionStartTimestamp
-        : 0;
-
-      if (elapsedTime < 479999) {
-        setIsUserWriting(false);
-      }
-
-      return response.data;
-    } catch (error) {
-      console.error("Error ending session:", error);
-    }
   };
 
   const deployAnky = async (): Promise<string | undefined> => {
@@ -567,6 +513,7 @@ export default function WritingGame() {
     return (
       <SessionCompleteScreen
         ankyMetadataRequestPending={ankyMetadataRequestPending}
+        setAnkyMetadataRequestPending={setAnkyMetadataRequestPending}
         sessionLongString={sessionLongString}
         onReset={resetSession}
         context={context!}
@@ -595,12 +542,13 @@ export default function WritingGame() {
         pauseOnHover
         theme="dark"
       />
-      <div className="absolute top-2 right-4 flex flex-row gap-2">
-        <button
-          onClick={() => {
-            setCreatePrompt(!createPrompt);
-          }}
-          className={`
+      {!createPrompt && (
+        <div className="absolute top-2 right-4 flex flex-row gap-2">
+          <button
+            onClick={() => {
+              setCreatePrompt(!createPrompt);
+            }}
+            className={`
             relative flex items-center justify-center
             w-10 h-10 rounded-lg transition-all duration-300
             ${
@@ -609,29 +557,30 @@ export default function WritingGame() {
                 : "bg-white/10 backdrop-blur-sm hover:bg-white/20"
             }
           `}
-          title="Toggle prompt creation"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            className={`w-6 h-6 transition-transform duration-300 ${
-              createPrompt ? "rotate-180 scale-110" : ""
-            }`}
+            title="Toggle prompt creation"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d={
-                createPrompt
-                  ? "M19 9l-7 7-7-7"
-                  : "M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
-              }
-            />
-          </svg>
-        </button>
-      </div>
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              className={`w-6 h-6 transition-transform duration-300 ${
+                createPrompt ? "rotate-180 scale-110" : ""
+              }`}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d={
+                  createPrompt
+                    ? "M19 9l-7 7-7-7"
+                    : "M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
+                }
+              />
+            </svg>
+          </button>
+        </div>
+      )}
       <AnkyProgressBar sessionStartTime={sessionStartTimestamp} />
       <LifeBar timeLeft={timeLeft} />
       <WritingComponent
@@ -640,7 +589,6 @@ export default function WritingGame() {
         handleTextChange={handleTextChange}
         loading={loading}
         createPrompt={createPrompt}
-        context={context!}
       />
     </div>
   );
@@ -652,14 +600,12 @@ function WritingComponent({
   handleTextChange,
   loading,
   createPrompt,
-  context,
 }: {
   text: string;
   prompt: string;
   handleTextChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   loading: boolean;
   createPrompt: boolean;
-  context: FrameContext;
 }) {
   const [streamedPrompt, setStreamedPrompt] = useState("");
   const [createPromptText, setCreatePromptText] = useState("");
@@ -692,35 +638,39 @@ function WritingComponent({
   }
 
   const handleCreateFrame = () => {
-    // Let's log each step to understand the transformation
+    // 1) Show the raw user input
     console.log("Starting prompt:", createPromptText);
 
-    // Step 1: First encode for the frame's prompt parameter
-    const encodedFramePrompt = createPromptText
-      .split(" ")
-      .map((word) => encodeURIComponent(word))
-      .join("%20");
-    console.log("Encoded frame prompt:", encodedFramePrompt);
+    // 2) Replace spaces with plus (+) signs
+    //    e.g. "this is the starting point" -> "this+is+the+starting+point"
+    const plusEncodedPrompt = createPromptText.replace(/\s/g, "+");
+    console.log("plusEncodedPrompt:", plusEncodedPrompt);
 
-    // Step 2: Create the complete frame URL
-    const frameUrl = `https://framesgiving.anky.bot?prompt=${encodedFramePrompt}&fid=${
-      context?.user?.fid || 18350
-    }`;
-    console.log("Frame URL:", frameUrl);
+    // 3) Single-encode that plus-encoded prompt
+    //    e.g. "this+is+the+starting+point" -> "this%2Bis%2Bthe%2Bstarting%2Bpoint"
+    const singleEncodedPrompt = encodeURIComponent(plusEncodedPrompt);
+    console.log("singleEncodedPrompt:", singleEncodedPrompt);
 
-    // Step 3: Encode the entire frameUrl for use in the embeds parameter
-    const encodedFrameUrl = encodeURIComponent(frameUrl);
-    console.log("Encoded frame URL:", encodedFrameUrl);
+    // 4) Build the raw frame URL, inserting the single-encoded prompt
+    //    e.g. "https://framesgiving.anky.bot?prompt=this%2Bis%2Bthe%2Bstarting%2Bpoint"
+    const rawFrameUrl = `https://framesgiving.anky.bot?prompt=${singleEncodedPrompt}`;
+    console.log("rawFrameUrl:", rawFrameUrl);
 
-    // Step 4: Create the composer URL with the encoded text and frame URL
-    const composerUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(
+    // 5) Double-encode the entire URL
+    //    e.g. "https%3A%2F%2Fframesgiving.anky.bot%3Fprompt%3Dthis%252Bis%252Bthe%252Bstarting%252Bpoint"
+    const doubleEncodedFrameUrl = encodeURIComponent(rawFrameUrl);
+    console.log("doubleEncodedFrameUrl:", doubleEncodedFrameUrl);
+
+    // 6) Construct the final Warpcast composer link
+    //    text= gets single-encoded, but framesgiving URL is double-encoded
+    const finalComposerUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(
       createPromptText
-    )}&embeds[]=${encodedFrameUrl}`;
-    console.log("Final composer URL:", composerUrl);
+    )}&embeds[]=${doubleEncodedFrameUrl}`;
+    console.log("finalComposerUrl:", finalComposerUrl);
 
-    // For debugging: Try to decode the URL to verify it's correct
+    // 7) (Optional) Test decoding to verify
     try {
-      const testUrl = new URL(decodeURIComponent(encodedFrameUrl));
+      const testUrl = new URL(decodeURIComponent(doubleEncodedFrameUrl));
       const testPrompt = testUrl.searchParams.get("prompt");
       console.log(
         "Test decode of prompt:",
@@ -730,8 +680,9 @@ function WritingComponent({
       console.error("Decode test failed:", err);
     }
 
-    navigator.clipboard.writeText(composerUrl);
-    sdk.actions.openUrl(composerUrl);
+    // 8) Copy to clipboard and open the Warpcast composer
+    navigator.clipboard.writeText(finalComposerUrl);
+    sdk.actions.openUrl(finalComposerUrl);
   };
 
   if (createPrompt) {
@@ -785,6 +736,7 @@ function SessionCompleteScreen({
   setAnkyMetadata,
   isDeployingAnky,
   setIsDeployingAnky,
+  setAnkyMetadataRequestPending,
   ankyMetadataRequestPending,
   isAnkySession,
 }: {
@@ -794,9 +746,10 @@ function SessionCompleteScreen({
   finalCastText: string | null;
   processingCastText: boolean;
   ankyMetadataRequestPending: boolean;
+  setAnkyMetadataRequestPending: (ankyMetadataRequestPending: boolean) => void;
   deployAnky?: () => Promise<string | undefined>;
   ankyMetadata?: AnkyMetadata;
-  setAnkyMetadata?: (ankyMetadata: AnkyMetadata) => void;
+  setAnkyMetadata: (ankyMetadata: AnkyMetadata) => void;
   isDeployingAnky?: boolean;
   setIsDeployingAnky?: (isDeployingAnky: boolean) => void;
   isAnkySession: boolean;
@@ -807,6 +760,7 @@ function SessionCompleteScreen({
   const [deployedAnkyCastHash, setDeployedAnkyCastHash] = useState("");
   const sessionData = extractSessionDataFromLongString(sessionLongString);
   const [revealAnkyMetadata, setRevealAnkyMetadata] = useState(false);
+  const prompt = sessionLongString.split("\n")[3];
 
   useEffect(() => {
     const startTime = new Date().getTime();
@@ -988,6 +942,8 @@ function SessionCompleteScreen({
         </div>
       </div>
 
+      <div className="text-white text-2xl font-bold mb-4 italic">{prompt}</div>
+
       <div className="w-full bg-black/30 h-64 backdrop-blur-sm rounded-xl p-4 shadow-2xl border border-white/10 overflow-hidden mb-8">
         <div className="h-64 overflow-hidden mb-4 h-full font-mono text-sm w-full">
           <div className="animate-float wrap h-64 w-full overflow-y-scroll text-white">
@@ -1005,6 +961,7 @@ function SessionCompleteScreen({
                 return;
               }
               setGeneratingAnkyFallback(true);
+              setAnkyMetadataRequestPending(true);
               const response = await axios.post(
                 `https://farcaster.anky.bot/framesgiving/generate-anky-image-from-session-long-string`,
                 {
@@ -1012,7 +969,7 @@ function SessionCompleteScreen({
                   fid: context?.user.fid,
                 }
               );
-              if (setAnkyMetadata) {
+              if (response.data) {
                 setAnkyMetadata({
                   ticker: response.data.ticker,
                   token_name: response.data.token_name,
@@ -1024,6 +981,7 @@ function SessionCompleteScreen({
                 });
               }
               setGeneratingAnkyFallback(false);
+              setAnkyMetadataRequestPending(false);
             }}
             className={`w-full py-4 px-6 bg-gradient-to-r from-pink-500 to-violet-500 rounded-lg font-bold text-lg transform transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/30 active:scale-95 ${
               generatingAnkyFallback ? "animate-pulse hover:animate-none" : ""
